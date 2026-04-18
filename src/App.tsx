@@ -239,81 +239,113 @@ export default function App() {
   };
 
   // Certificate Component
-  const CertificateModal = ({ cert, onClose }: { cert: UserCertificate, onClose: () => void }) => (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-      <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="max-w-4xl w-full bg-white text-slate-900 rounded-[2rem] overflow-hidden shadow-2xl relative"
-      >
-        <button 
-          onClick={onClose}
-          className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors z-20"
-        >
-          <X className="w-6 h-6 text-slate-400" />
-        </button>
+  const CertificateModal = ({ cert, onClose }: { cert: UserCertificate, onClose: () => void }) => {
+    const isMaster = cert.userName.includes('(MASTER GRADUATE)');
+    
+    const rankColors = {
+      'Junior': {
+        gradient: 'from-slate-400 to-slate-600',
+        text: 'text-slate-600',
+        bg: 'bg-slate-50',
+        glow: 'bg-slate-200'
+      },
+      'Analyst': {
+        gradient: 'from-sky-500 to-sky-700',
+        text: 'text-sky-600',
+        bg: 'bg-sky-50',
+        glow: 'bg-sky-100'
+      },
+      'Expert': {
+        gradient: 'from-amber-400 to-amber-600',
+        text: 'text-amber-600',
+        bg: 'bg-amber-50',
+        glow: 'bg-amber-100'
+      }
+    };
 
-        <div className="p-12 text-center relative overflow-hidden">
-          {/* Decorative elements */}
-          <div className="absolute top-0 left-0 w-full h-4 bg-gradient-to-r from-sky-500 via-purple-500 to-sky-500" />
-          <div className="absolute -top-24 -left-24 w-64 h-64 bg-sky-100 rounded-full blur-3xl opacity-50" />
-          <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-purple-100 rounded-full blur-3xl opacity-50" />
-          
-          <div className="relative z-10 flex flex-col items-center">
-            <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mb-8">
-              <Award className="w-10 h-10 text-sky-600" />
-            </div>
+    const currentTheme = isMaster 
+      ? { gradient: 'from-purple-500 via-pink-500 to-orange-500', text: 'text-purple-600', bg: 'bg-indigo-50', glow: 'bg-purple-100' }
+      : rankColors[cert.rank as keyof typeof rankColors] || rankColors['Junior'];
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          className="max-w-4xl w-full bg-white text-slate-900 rounded-[2rem] overflow-hidden shadow-2xl relative border-8 border-slate-50"
+        >
+          <button 
+            onClick={onClose}
+            className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors z-20"
+          >
+            <X className="w-6 h-6 text-slate-400" />
+          </button>
+
+          <div className="p-12 text-center relative overflow-hidden">
+            {/* Decorative elements */}
+            <div className={`absolute top-0 left-0 w-full h-4 bg-gradient-to-r ${currentTheme.gradient}`} />
+            <div className={`absolute -top-24 -left-24 w-64 h-64 ${currentTheme.glow} rounded-full blur-3xl opacity-50`} />
+            <div className={`absolute -bottom-24 -right-24 w-64 h-64 ${currentTheme.glow} rounded-full blur-3xl opacity-50`} />
             
-            <h4 className="text-xs font-black uppercase tracking-[0.4em] text-sky-600 mb-2">Certificado de Conclusão</h4>
-            <h2 className="text-4xl font-serif text-slate-900 mb-8 italic">Data Lab Academy</h2>
-            
-            <div className="mb-8">
-              <p className="text-slate-500 uppercase tracking-widest text-[10px] mb-2 font-bold">Certificamos que</p>
-              <h3 className="text-3xl font-bold border-b-2 border-slate-100 pb-2 px-12 inline-block">{cert.userName}</h3>
-            </div>
-            
-            <p className="text-slate-600 max-w-lg mx-auto leading-relaxed mb-8">
-              Concluiu com êxito o módulo <span className="font-bold text-slate-900">{cert.rank}</span> na trilha de <span className="font-bold text-slate-900 uppercase">{cert.track}</span>, demonstrando domínio nas competências necessárias para manipulação e análise de dados.
-            </p>
-            
-            <div className="grid grid-cols-3 gap-12 w-full max-w-2xl border-t border-slate-100 pt-8">
-              <div>
-                <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Data de Emissão</p>
-                <p className="font-mono text-sm">{cert.issuedAt}</p>
+            <div className="relative z-10 flex flex-col items-center">
+              <div className={`w-20 h-20 ${currentTheme.bg} rounded-full flex items-center justify-center mb-8 shadow-inner`}>
+                <Award className={`w-10 h-10 ${currentTheme.text}`} />
               </div>
-              <div className="flex justify-center flex-col items-center">
-                <div className="w-16 h-16 border-2 border-slate-200 rounded-lg flex items-center justify-center transform rotate-12 mb-2">
-                   <ShieldCheck className="w-8 h-8 text-slate-300" />
+              
+              <h4 className={`text-xs font-black uppercase tracking-[0.4em] ${currentTheme.text} mb-2`}>
+                {isMaster ? 'Certificado de Graduação Master' : `Certificado de Mestria ${cert.rank}`}
+              </h4>
+              <h2 className="text-4xl font-serif text-slate-900 mb-8 italic tracking-tight">Analyst Master Academy</h2>
+              
+              <div className="mb-8">
+                <p className="text-slate-500 uppercase tracking-widest text-[10px] mb-2 font-bold">Certificamos que</p>
+                <h3 className="text-4xl font-black border-b-2 border-slate-100 pb-2 px-12 inline-block tracking-tighter capitalize">{cert.userName.toLowerCase()}</h3>
+              </div>
+              
+              <p className="text-slate-600 max-w-lg mx-auto leading-relaxed mb-8 text-lg">
+                Concluiu com êxito {isMaster ? 'a Trilha Completa' : `o módulo ${cert.rank}`} em <span className="font-black text-slate-900 uppercase">{cert.track}</span>, demonstrando domínio nas competências avançadas de coleta, tratamento e análise de dados.
+              </p>
+              
+              <div className="grid grid-cols-3 gap-12 w-full max-w-2xl border-t border-slate-100 pt-8 mt-4">
+                <div className="text-left">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Data de Emissão</p>
+                  <p className="font-mono text-sm font-bold">{cert.issuedAt}</p>
                 </div>
-                <p className="text-[8px] uppercase font-bold text-slate-400">Selo de Autenticidade</p>
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="w-24 h-12 border-b border-slate-900 mb-1" />
-                <p className="text-[10px] uppercase font-bold text-slate-400">Coordenador Acadêmico</p>
+                <div className="flex justify-center flex-col items-center border-x border-slate-50 px-8">
+                  <div className={`w-16 h-16 border-2 ${currentTheme.text} border-dashed opacity-20 rounded-lg flex items-center justify-center transform rotate-12 mb-2`}>
+                     <ShieldCheck className="w-8 h-8" />
+                  </div>
+                  <p className="text-[8px] uppercase font-black text-slate-400 tracking-tighter">ID: AM-{cert.track.toUpperCase()}-{cert.rank.toUpperCase()}</p>
+                </div>
+                <div className="flex flex-col items-center">
+                  <div className="w-24 h-12 border-b border-slate-900 mb-2 opacity-10" />
+                  <p className="text-[10px] uppercase font-black text-slate-900">Coordenação Geral</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Analyst Master</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        
-        <div className="bg-slate-50 p-6 flex items-center justify-center gap-4">
-          <button className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-full font-bold text-sm hover:bg-sky-600 transition-all">
-             <Download className="w-4 h-4" /> Download PDF
-          </button>
-          <button className="flex items-center gap-2 px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-full font-bold text-sm hover:bg-slate-100 transition-all">
-             <Share2 className="w-4 h-4" /> Compartilhar
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
+          
+          <div className="bg-slate-50 p-6 flex items-center justify-center gap-4 border-t border-slate-100">
+            <button className="flex items-center gap-3 px-8 py-3 bg-slate-900 text-white rounded-full font-black text-xs uppercase tracking-widest hover:bg-sky-600 transition-all shadow-lg hover:shadow-sky-500/20">
+               <Download className="w-4 h-4" /> Exportar Diploma
+            </button>
+            <button className="flex items-center gap-3 px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-full font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all">
+               <Share2 className="w-4 h-4" /> Compartilhar Performance
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
 
   if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-sky-400">
         <div className="flex flex-col items-center gap-4">
           <DatabaseZap className="w-12 h-12 animate-bounce" />
-          <h1 className="text-xl font-mono terminal-anim">Conectando ao Lab...</h1>
+          <h1 className="text-xl font-mono terminal-anim">Conectando ao Analyst Master...</h1>
         </div>
       </div>
     );
@@ -345,11 +377,11 @@ export default function App() {
         >
           <div className="flex items-center justify-center gap-4 mb-4">
             <Rocket className="w-10 h-10 text-sky-400" />
-            <h1 className="text-5xl font-black tracking-tighter text-white">
-              DATA <span className="text-sky-400">LAB</span>
+            <h1 className="text-5xl font-black tracking-tighter text-white uppercase">
+              Analyst <span className="text-sky-400">Master</span>
             </h1>
           </div>
-          <p className="text-slate-400 text-lg max-w-lg mx-auto">Sua jornada para o domínio de dados começa aqui. Escolha uma trilha e torne-se um especialista.</p>
+          <p className="text-slate-400 text-lg max-w-lg mx-auto">Sua jornada para o domínio analítico começa aqui. Escolha uma trilha e torne-se um especialista.</p>
           
           <div className="mt-8 flex flex-col items-center gap-1">
              <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Seja bem-vindo,</p>

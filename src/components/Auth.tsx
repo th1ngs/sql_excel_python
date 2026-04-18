@@ -67,8 +67,8 @@ export const AuthUI = ({ onAuthSuccess }: AuthProps) => {
           </h2>
           <p className="text-slate-400 text-sm text-center">
             {isLogin 
-              ? 'Acesse seu laboratório e continue sua jornada de mestre em dados.' 
-              : 'Comece hoje mesmo sua trilha para o topo da engenharia de dados.'}
+              ? 'Acesse seu laboratório e continue sua jornada como Analyst Master.' 
+              : 'Comece hoje mesmo sua trilha para se tornar um Analyst Master.'}
           </p>
         </div>
 
@@ -82,7 +82,7 @@ export const AuthUI = ({ onAuthSuccess }: AuthProps) => {
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-3 text-white outline-none focus:border-sky-500 transition-all"
-                placeholder="Ex: Wesley Mano"
+                placeholder="Ex: Seu Nome"
               />
             </div>
           )}
@@ -117,7 +117,7 @@ export const AuthUI = ({ onAuthSuccess }: AuthProps) => {
             className="w-full bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-black py-4 rounded-2xl transition-all shadow-xl shadow-sky-500/10 flex items-center justify-center gap-2 mt-4"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-            {isLogin ? 'Entrar no Lab' : 'Criar minha conta'}
+            {isLogin ? 'Entrar no Analyst Master' : 'Criar minha conta'}
           </button>
         </form>
 
