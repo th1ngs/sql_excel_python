@@ -2161,5 +2161,523 @@ export const challenges: Challenge[] = [
       { loja: 'Sul', f2023: 2500.0, bonus: 500 }
     ],
     initialQuery: 'SELECT loja, SUM(CASE WHEN ano=2023 THEN valor ELSE 0 END) as f2023 FROM v GROUP BY loja'
+  },
+
+  // ==========================================
+  // EXPANSÃO: EXCEL AVANÇADO (Mais Desafios)
+  // ==========================================
+
+  // BÁSICO - EXCEL
+  {
+    id: 'excel-b-ext-1',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Mínimo e Máximo de Estoque',
+    difficulty: 'Básico',
+    category: 'MIN/MAX',
+    description: "Simule as funções =MÍN() e =MÁX(). Encontre o menor e o maior valor de estoque na tabela.",
+    hint: "Use MIN(coluna) e MAX(coluna)",
+    tableSetup: [
+      "CREATE TABLE estoque (item TEXT, qtd INTEGER);",
+      "INSERT INTO estoque VALUES ('A', 10), ('B', 50), ('C', 5), ('D', 100);"
+    ],
+    expectedOutput: [{ menor: 5, maior: 100 }],
+    initialQuery: 'SELECT MIN(qtd) as menor, MAX(qtd) as maior FROM estoque'
+  },
+  {
+    id: 'excel-b-ext-2',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Filtro de Data Recente',
+    difficulty: 'Básico',
+    category: 'FILTER',
+    description: "Filtre todas as vendas que ocorreram após '2023-06-01'.",
+    hint: "WHERE data > '2023-06-01'",
+    tableSetup: [
+      "CREATE TABLE vendas_data (id INTEGER, data TEXT, valor REAL);",
+      "INSERT INTO vendas_data VALUES (1, '2023-01-10', 100), (2, '2023-07-15', 500), (3, '2023-12-01', 350);"
+    ],
+    expectedOutput: [{ id: 2, data: '2023-07-15', valor: 500 }, { id: 3, data: '2023-12-01', valor: 350 }],
+    initialQuery: 'SELECT * FROM vendas_data'
+  },
+
+  // INTERMEDIÁRIO - EXCEL
+  {
+    id: 'excel-i-ext-1',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Média Condicional (AVERAGEIF)',
+    difficulty: 'Intermediário',
+    category: 'AVERAGEIF',
+    description: "Simule =MÉDIA.SE(). Calcule a média salarial apenas do departamento 'Marketing'.",
+    hint: "Use AVG() com WHERE",
+    tableSetup: [
+      "CREATE TABLE folha (nome TEXT, depto TEXT, salario REAL);",
+      "INSERT INTO folha VALUES ('Ana', 'TI', 5000), ('Joao', 'Marketing', 4500), ('Bia', 'Marketing', 5500), ('Leo', 'RH', 4000);"
+    ],
+    expectedOutput: [{ media_mkt: 5000.0 }],
+    initialQuery: "SELECT AVG(salario) as media_mkt FROM folha WHERE depto = 'Marketing'"
+  },
+  {
+    id: 'excel-i-ext-2',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Arredondamento de Valores',
+    difficulty: 'Intermediário',
+    category: 'ROUND',
+    description: "Simule a função =ARRED(). Arredonde os preços dos produtos para 1 casa decimal.",
+    hint: "ROUND(preco, 1)",
+    tableSetup: [
+      "CREATE TABLE precos_quebrados (item TEXT, preco REAL);",
+      "INSERT INTO precos_quebrados VALUES ('A', 10.556), ('B', 19.123), ('C', 5.789);"
+    ],
+    expectedOutput: [{ item: 'A', preco: 10.6 }, { item: 'B', preco: 19.1 }, { item: 'C', preco: 5.8 }],
+    initialQuery: 'SELECT item, ROUND(preco, 1) as preco FROM precos_quebrados'
+  },
+
+  // AVANÇADO - EXCEL
+  {
+    id: 'excel-a-ext-1',
+    track: 'excel',
+    rank: 'Expert',
+    title: 'Soma Acumulada (Running Total)',
+    difficulty: 'Avançado',
+    category: 'WINDOW',
+    description: "Calcule o faturamento acumulado mês a mês.",
+    hint: "SUM(valor) OVER(ORDER BY id) como acumulado",
+    tableSetup: [
+      "CREATE TABLE meses (id INTEGER, mes TEXT, valor REAL);",
+      "INSERT INTO meses VALUES (1, 'Jan', 1000), (2, 'Fev', 1500), (3, 'Mar', 1200);"
+    ],
+    expectedOutput: [
+      { mes: 'Jan', acumulado: 1000 },
+      { mes: 'Fev', acumulado: 2500 },
+      { mes: 'Mar', acumulado: 3700 }
+    ],
+    initialQuery: 'SELECT mes, SUM(valor) OVER(ORDER BY id) as acumulado FROM meses',
+    orderSensitive: true
+  },
+
+  // ==========================================
+  // EXPANSÃO: PYTHON DATA (Mais Desafios)
+  // ==========================================
+
+  // BÁSICO - PYTHON
+  {
+    id: 'python-b-ext-1',
+    track: 'python',
+    rank: 'Junior',
+    title: 'Cálculo de Coluna (Apply)',
+    difficulty: 'Básico',
+    category: 'APPLY',
+    description: "Simule criar uma nova coluna `total` que Multiplica `qtd` por `preco`.",
+    hint: "SELECT *, (qtd * preco) as total ...",
+    tableSetup: [
+      "CREATE TABLE df_vendas (item TEXT, qtd INTEGER, preco REAL);",
+      "INSERT INTO df_vendas VALUES ('A', 2, 10.0), ('B', 5, 5.0);"
+    ],
+    expectedOutput: [{ item: 'A', total: 20.0 }, { item: 'B', total: 25.0 }],
+    initialQuery: 'SELECT item, (qtd * preco) as total FROM df_vendas'
+  },
+  {
+    id: 'python-b-ext-2',
+    track: 'python',
+    rank: 'Junior',
+    title: 'Seleção de Colunas Específicas',
+    difficulty: 'Básico',
+    category: 'SELECT',
+    description: "No Pandas, usamos df[['col1', 'col2']]. Selecione apenas `nome` e `email` dos usuários.",
+    hint: "SELECT nome, email FROM users",
+    tableSetup: [
+      "CREATE TABLE users (id INTEGER, nome TEXT, email TEXT, senha TEXT);",
+      "INSERT INTO users VALUES (1, 'Ana', 'ana@email.com', '123'), (2, 'Bob', 'bob@email.com', '456');"
+    ],
+    expectedOutput: [{ nome: 'Ana', email: 'ana@email.com' }, { nome: 'Bob', email: 'bob@email.com' }],
+    initialQuery: 'SELECT * FROM users'
+  },
+
+  // INTERMEDIÁRIO - PYTHON
+  {
+    id: 'python-i-ext-1',
+    track: 'python',
+    rank: 'Analyst',
+    title: 'Tratamento de Nulos (Fillna)',
+    difficulty: 'Intermediário',
+    category: 'FILLNA',
+    description: "Simule `df.fillna(0)`. Substitua valores nulos na coluna `score` por 0.",
+    hint: "COALESCE(score, 0)",
+    tableSetup: [
+      "CREATE TABLE dataset (id INTEGER, score REAL);",
+      "INSERT INTO dataset VALUES (1, 85.0), (2, NULL), (3, 70.0);"
+    ],
+    expectedOutput: [{ id: 1, score: 85.0 }, { id: 2, score: 0 }, { id: 3, score: 70.0 }],
+    initialQuery: 'SELECT id, score FROM dataset'
+  },
+  {
+    id: 'python-i-ext-2',
+    track: 'python',
+    rank: 'Analyst',
+    title: 'Conversão de Tipos (Astype)',
+    difficulty: 'Intermediário',
+    category: 'ASTYPE',
+    description: "Simule `df['id'].astype(str)`. Converta o ID numérico para texto.",
+    hint: "CAST(id AS TEXT)",
+    tableSetup: [
+      "CREATE TABLE raw_ids (id INTEGER);",
+      "INSERT INTO raw_ids VALUES (101), (202);"
+    ],
+    expectedOutput: [{ id_str: '101' }, { id_str: '202' }],
+    initialQuery: 'SELECT CAST(id AS TEXT) as id_str FROM raw_ids'
+  },
+
+  // AVANÇADO - PYTHON
+  {
+    id: 'python-a-ext-1',
+    track: 'python',
+    rank: 'Expert',
+    isFinalTest: true,
+    title: 'Operações em Janela (Rolling)',
+    difficulty: 'Avançado',
+    category: 'ROLLING',
+    description: "Simule uma média móvel de 2 períodos para os valores de venda.",
+    hint: "AVG(valor) OVER(ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)",
+    tableSetup: [
+      "CREATE TABLE series (id INTEGER, valor REAL);",
+      "INSERT INTO series VALUES (1, 10), (2, 20), (3, 30), (4, 40);"
+    ],
+    expectedOutput: [
+      { id: 1, media_movel: 10.0 },
+      { id: 2, media_movel: 15.0 },
+      { id: 3, media_movel: 25.0 },
+      { id: 4, media_movel: 35.0 }
+    ],
+    initialQuery: 'SELECT id, AVG(valor) OVER(ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) as media_movel FROM series',
+    orderSensitive: true
+  },
+
+  // ==========================================
+  // MEGA EXPANSÃO: EXCEL (JUNIOR & ANALYST)
+  // ==========================================
+
+  // JUNIOR - EXCEL
+  {
+    id: 'excel-b-ext-3',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Função SE Básica (IF)',
+    difficulty: 'Básico',
+    category: 'LOGIC',
+    description: "Simule a função =SE(valor > 100; 'Caro'; 'Barato').",
+    hint: "Use CASE WHEN preco > 100 THEN 'Caro' ELSE 'Barato' END",
+    tableSetup: [
+      "CREATE TABLE itens (nome TEXT, preco REAL);",
+      "INSERT INTO itens VALUES ('Pneu', 250), ('Filtro', 80), ('Oleo', 120);"
+    ],
+    expectedOutput: [
+      { nome: 'Pneu', status: 'Caro' },
+      { nome: 'Filtro', status: 'Barato' },
+      { nome: 'Oleo', status: 'Caro' }
+    ],
+    initialQuery: 'SELECT nome FROM itens'
+  },
+  {
+    id: 'excel-b-ext-4',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Extração de Texto (LEFT)',
+    difficulty: 'Básico',
+    category: 'TEXT',
+    description: "Simule =ESQUERDA(texto; 3) para pegar o prefixo dos códigos.",
+    hint: "SUBSTR(codigo, 1, 3)",
+    tableSetup: [
+      "CREATE TABLE codigos (codigo TEXT);",
+      "INSERT INTO codigos VALUES ('REF-A101'), ('SKU-B202'), ('REF-C303');"
+    ],
+    expectedOutput: [{ prefixo: 'REF' }, { prefixo: 'SKU' }, { prefixo: 'REF' }],
+    initialQuery: 'SELECT SUBSTR(codigo, 1, 3) as prefixo FROM codigos'
+  },
+  {
+    id: 'excel-b-ext-5',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Cálculo de Dias Úteis',
+    difficulty: 'Básico',
+    category: 'DATE',
+    description: "Simule calcular a diferença de dias entre duas datas.",
+    hint: "JULIANDAY(data_fim) - JULIANDAY(data_inicio)",
+    tableSetup: [
+      "CREATE TABLE prazos (tarefa TEXT, data_inicio TEXT, data_fim TEXT);",
+      "INSERT INTO prazos VALUES ('Projeto A', '2023-10-01', '2023-10-10'), ('Projeto B', '2023-10-05', '2023-10-07');"
+    ],
+    expectedOutput: [{ tarefa: 'Projeto A', dias: 9 }, { tarefa: 'Projeto B', dias: 2 }],
+    initialQuery: 'SELECT tarefa, CAST(JULIANDAY(data_fim) - JULIANDAY(data_inicio) AS INTEGER) as dias FROM prazos'
+  },
+
+  // ANALYST - EXCEL
+  {
+    id: 'excel-i-ext-3',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Lógica E-OU Combinada',
+    difficulty: 'Intermediário',
+    category: 'LOGIC',
+    description: "Classifique como 'Urgente' se prioridade = 'Alta' E status = 'Pendente'. Senão 'Normal'.",
+    hint: "CASE WHEN prioridade = 'Alta' AND status = 'Pendente' THEN 'Urgente' ELSE 'Normal' END",
+    tableSetup: [
+      "CREATE TABLE chamados (id INTEGER, prioridade TEXT, status TEXT);",
+      "INSERT INTO chamados VALUES (1, 'Alta', 'Pendente'), (2, 'Média', 'Pendente'), (3, 'Alta', 'Resolvido');"
+    ],
+    expectedOutput: [
+      { id: 1, classificacao: 'Urgente' },
+      { id: 2, classificacao: 'Normal' },
+      { id: 3, classificacao: 'Normal' }
+    ],
+    initialQuery: 'SELECT id FROM chamados'
+  },
+  {
+    id: 'excel-i-ext-4',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Limpeza de Dados (TRIM)',
+    difficulty: 'Intermediário',
+    category: 'TEXT',
+    description: "Limpe os nomes que vieram com espaços extras.",
+    hint: "TRIM(nome)",
+    tableSetup: [
+      "CREATE TABLE sujos (nome TEXT);",
+      "INSERT INTO sujos VALUES ('  Ana  '), ('  Beto'), ('Carlos  ');"
+    ],
+    expectedOutput: [{ nome_limpo: 'Ana' }, { nome_limpo: 'Beto' }, { nome_limpo: 'Carlos' }],
+    initialQuery: 'SELECT TRIM(nome) as nome_limpo FROM sujos'
+  },
+  {
+    id: 'excel-i-ext-5',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Subtotal Agrupado',
+    difficulty: 'Intermediário',
+    category: 'GROUP BY',
+    description: "Crie um subtotal de faturamento por Região.",
+    hint: "GROUP BY regiao",
+    tableSetup: [
+      "CREATE TABLE global_vendas (regiao TEXT, valor REAL);",
+      "INSERT INTO global_vendas VALUES ('Norte', 5000), ('Norte', 2000), ('Sul', 8000), ('Leste', 3000);"
+    ],
+    expectedOutput: [
+      { regiao: 'Leste', total: 3000 },
+      { regiao: 'Norte', total: 7000 },
+      { regiao: 'Sul', total: 8000 }
+    ],
+    initialQuery: 'SELECT regiao, SUM(valor) as total FROM global_vendas GROUP BY regiao'
+  },
+
+  // ADICIONANDO MAIS EXCEL (Date, Text, Logic, Filter, Min, Max, Avg)
+  
+  // BÁSICO - EXCEL
+  {
+    id: 'excel-b-ext-6',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Extração de Ano',
+    difficulty: 'Básico',
+    category: 'DATE',
+    description: "Simule =ANO(data). Extraia apenas o ano de uma data no formato 'YYYY-MM-DD'.",
+    hint: "STRFTIME('%Y', data_venda)",
+    tableSetup: [
+      "CREATE TABLE vendas_ano (id INTEGER, data_venda TEXT);",
+      "INSERT INTO vendas_ano VALUES (1, '2023-05-15'), (2, '2024-02-10'), (3, '2022-12-25');"
+    ],
+    expectedOutput: [{ ano: '2023' }, { ano: '2024' }, { ano: '2022' }],
+    initialQuery: "SELECT STRFTIME('%Y', data_venda) as ano FROM vendas_ano"
+  },
+  {
+    id: 'excel-b-ext-7',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Tudo em Maiúsculo',
+    difficulty: 'Básico',
+    category: 'TEXT',
+    description: "Simule =MAIÚSCULA(). Converta a descrição dos produtos para letras maiúsculas.",
+    hint: "UPPER(descricao)",
+    tableSetup: [
+      "CREATE TABLE prod_desc (descricao TEXT);",
+      "INSERT INTO prod_desc VALUES ('mouse sem fio'), ('teclado mecanico'), ('monitor 4k');"
+    ],
+    expectedOutput: [{ desc_upper: 'MOUSE SEM FIO' }, { desc_upper: 'TECLADO MECANICO' }, { desc_upper: 'MONITOR 4K' }],
+    initialQuery: 'SELECT UPPER(descricao) as desc_upper FROM prod_desc'
+  },
+  {
+    id: 'excel-b-ext-8',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Verificação Par ou Ímpar',
+    difficulty: 'Básico',
+    category: 'LOGIC',
+    description: "Use lógica para identificar se o `id` é 'Par' ou 'Ímpar'.",
+    hint: "CASE WHEN id % 2 = 0 THEN 'Par' ELSE 'Ímpar' END",
+    tableSetup: [
+      "CREATE TABLE numeros (id INTEGER);",
+      "INSERT INTO numeros VALUES (10), (15), (22), (33);"
+    ],
+    expectedOutput: [
+      { id: 10, tipo: 'Par' },
+      { id: 15, tipo: 'Ímpar' },
+      { id: 22, tipo: 'Par' },
+      { id: 33, tipo: 'Ímpar' }
+    ],
+    initialQuery: 'SELECT id FROM numeros'
+  },
+  {
+    id: 'excel-b-ext-9',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Filtro Múltiplo de Estoque',
+    difficulty: 'Básico',
+    category: 'FILTER',
+    description: "Filtre produtos que estão no 'Setor A' E têm quantidade menor que 20.",
+    hint: "WHERE setor = 'Setor A' AND qtd < 20",
+    tableSetup: [
+      "CREATE TABLE prod_estoque (id INTEGER, setor TEXT, qtd INTEGER);",
+      "INSERT INTO prod_estoque VALUES (1, 'Setor A', 15), (2, 'Setor B', 10), (3, 'Setor A', 50), (4, 'Setor A', 5);"
+    ],
+    expectedOutput: [{ id: 1, setor: 'Setor A', qtd: 15 }, { id: 4, setor: 'Setor A', qtd: 5 }],
+    initialQuery: 'SELECT * FROM prod_estoque'
+  },
+  {
+    id: 'excel-b-ext-10',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Amplitude de Preços',
+    difficulty: 'Básico',
+    category: 'MIN/MAX',
+    description: "Calcule a amplitude (Diferença entre o maior e o menor preço).",
+    hint: "MAX(preco) - MIN(preco)",
+    tableSetup: [
+      "CREATE TABLE precos_amp (preco REAL);",
+      "INSERT INTO precos_amp VALUES (10.0), (50.0), (5.0), (100.0);"
+    ],
+    expectedOutput: [{ amplitude: 95.0 }],
+    initialQuery: 'SELECT MAX(preco) - MIN(preco) as amplitude FROM precos_amp'
+  },
+  {
+    id: 'excel-b-ext-11',
+    track: 'excel',
+    rank: 'Junior',
+    title: 'Média de Avaliações',
+    difficulty: 'Básico',
+    category: 'AVG',
+    description: "Calcule a média de estrelas para os produtos da categoria 'Eletrônicos'.",
+    hint: "AVG(estrelas) ... WHERE categoria = 'Eletrônicos'",
+    tableSetup: [
+      "CREATE TABLE avaliacoes (categoria TEXT, estrelas INTEGER);",
+      "INSERT INTO avaliacoes VALUES ('Eletrônicos', 5), ('Livros', 4), ('Eletrônicos', 3), ('Eletrônicos', 4);"
+    ],
+    expectedOutput: [{ media_estrelas: 4.0 }],
+    initialQuery: "SELECT AVG(estrelas) as media_estrelas FROM avaliacoes WHERE categoria = 'Eletrônicos'"
+  },
+
+  // INTERMEDIÁRIO - EXCEL
+  {
+    id: 'excel-i-ext-6',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Idade Aproximada',
+    difficulty: 'Intermediário',
+    category: 'DATE',
+    description: "Calcule a idade aproximada em anos a partir do ano de nascimento.",
+    hint: "2024 - STRFTIME('%Y', nascimento)",
+    tableSetup: [
+      "CREATE TABLE nasc (nome TEXT, nascimento TEXT);",
+      "INSERT INTO nasc VALUES ('Ana', '1990-01-01'), ('Joao', '1985-05-12'), ('Bia', '2000-11-20');"
+    ],
+    expectedOutput: [{ nome: 'Ana', idade: 34 }, { nome: 'Joao', idade: 39 }, { nome: 'Bia', idade: 24 }],
+    initialQuery: "SELECT nome, (2024 - CAST(STRFTIME('%Y', nascimento) AS INTEGER)) as idade FROM nasc"
+  },
+  {
+    id: 'excel-i-ext-7',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Substituição de Caracteres',
+    difficulty: 'Intermediário',
+    category: 'TEXT',
+    description: "Substitua todos os hífens '-' por barras '/' nas datas registradas como texto.",
+    hint: "REPLACE(data_texto, '-', '/')",
+    tableSetup: [
+      "CREATE TABLE datas_sujas (data_texto TEXT);",
+      "INSERT INTO datas_sujas VALUES ('2023-01-01'), ('2023-05-15');"
+    ],
+    expectedOutput: [{ data_ajustada: '2023/01/01' }, { data_ajustada: '2023/05/15' }],
+    initialQuery: "SELECT REPLACE(data_texto, '-', '/') as data_ajustada FROM datas_sujas"
+  },
+  {
+    id: 'excel-i-ext-8',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Classificação de Score',
+    difficulty: 'Intermediário',
+    category: 'LOGIC',
+    description: "Classifique o score: >= 80 'Excelente', >= 50 'Bom', senão 'Melhorável'.",
+    hint: "CASE WHEN score >= 80 THEN 'Excelente' WHEN score >= 50 THEN 'Bom' ELSE 'Melhorável' END",
+    tableSetup: [
+      "CREATE TABLE scores (aluno TEXT, score INTEGER);",
+      "INSERT INTO scores VALUES ('Ana', 90), ('Joao', 45), ('Bia', 75);"
+    ],
+    expectedOutput: [
+      { aluno: 'Ana', status: 'Excelente' },
+      { aluno: 'Bia', status: 'Bom' },
+      { aluno: 'Joao', status: 'Melhorável' }
+    ],
+    initialQuery: 'SELECT aluno FROM scores'
+  },
+  {
+    id: 'excel-i-ext-9',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Filtro Avançado de Pedidos',
+    difficulty: 'Intermediário',
+    category: 'FILTER',
+    description: "Selecione pedidos pagos que sejam maiores que 1000 OU pedidos pendentes maiores que 5000.",
+    hint: "WHERE (status='Pago' AND valor > 1000) OR (status='Pendente' AND valor > 5000)",
+    tableSetup: [
+      "CREATE TABLE pedidos_filt (id INTEGER, status TEXT, valor REAL);",
+      "INSERT INTO pedidos_filt VALUES (1, 'Pago', 1200), (2, 'Pendente', 2000), (3, 'Pendente', 6000), (4, 'Pago', 500);"
+    ],
+    expectedOutput: [
+      { id: 1, status: 'Pago', valor: 1200 },
+      { id: 3, status: 'Pendente', valor: 6000 }
+    ],
+    initialQuery: 'SELECT * FROM pedidos_filt'
+  },
+  {
+    id: 'excel-i-ext-10',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Extremos por Grupo',
+    difficulty: 'Intermediário',
+    category: 'MIN/MAX',
+    description: "Encontre o maior salário por departamento.",
+    hint: "SELECT depto, MAX(salario) ... GROUP BY depto",
+    tableSetup: [
+      "CREATE TABLE depto_sal (nome TEXT, depto TEXT, salario REAL);",
+      "INSERT INTO depto_sal VALUES ('Ana', 'TI', 5000), ('Joao', 'RH', 4000), ('Bia', 'TI', 7000), ('Leo', 'RH', 4500);"
+    ],
+    expectedOutput: [{ depto: 'RH', max_sal: 4500.0 }, { depto: 'TI', max_sal: 7000.0 }],
+    initialQuery: 'SELECT depto, MAX(salario) as max_sal FROM depto_sal GROUP BY depto'
+  },
+  {
+    id: 'excel-i-ext-11',
+    track: 'excel',
+    rank: 'Analyst',
+    title: 'Média com Alvo Superior',
+    difficulty: 'Intermediário',
+    category: 'AVG',
+    description: "Calcule a média de vendas apenas para os vendedores que venderam acima de 2000.",
+    hint: "SELECT AVG(valor) ... WHERE valor > 2000",
+    tableSetup: [
+      "CREATE TABLE vend_avg (vendedor TEXT, valor REAL);",
+      "INSERT INTO vend_avg VALUES ('Ana', 2500), ('Joao', 1500), ('Bia', 3500), ('Leo', 1000);"
+    ],
+    expectedOutput: [{ media_top: 3000.0 }],
+    initialQuery: 'SELECT AVG(valor) as media_top FROM vend_avg WHERE valor > 2000'
   }
 ];

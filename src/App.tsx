@@ -102,24 +102,55 @@ export default function App() {
     // Check for certificate
     const challenge = challenges.find(c => c.id === id);
     if (challenge?.isFinalTest && selectedTrack) {
-      const existing = certificates.find(cert => cert.rank === challenge.rank && cert.track === selectedTrack);
+      const existing = certificates.find(cert => cert.rank === challenge.rank && cert.track === selectedTrack && !cert.userName.includes('(MASTER GRADUATE)'));
+      
+      let finalNewCerts = [...certificates];
+      let triggeredCert: UserCertificate | null = null;
+
       if (!existing) {
-        const newCert: UserCertificate = {
+        const levelCert: UserCertificate = {
           rank: challenge.rank,
           track: selectedTrack,
           issuedAt: new Date().toLocaleDateString('pt-BR'),
           userName: userName
         };
-        const newCerts = [...certificates, newCert];
-        setCertificates(newCerts);
+        triggeredCert = levelCert;
+        finalNewCerts = [...finalNewCerts, levelCert];
         
-        // Persist to Firestore
+        // Persist level certificate to Firestore
         await setDoc(doc(db, 'users', user.uid, 'certificates', `${selectedTrack}-${challenge.rank}`), {
-          ...newCert,
-          issuedAtServer: serverTimestamp() // Better for rules, but issuedAt is for UI
+          ...levelCert,
+          issuedAtServer: serverTimestamp()
         });
-        
-        setShowCert(newCert);
+      }
+
+      // Check for Master Graduate status (All 3 levels completed)
+      // Level certificates are: Junior, Analyst, Expert
+      const hasJunior = finalNewCerts.some(c => c.track === selectedTrack && c.rank === 'Junior' && !c.userName.includes('(MASTER GRADUATE)'));
+      const hasAnalyst = finalNewCerts.some(c => c.track === selectedTrack && c.rank === 'Analyst' && !c.userName.includes('(MASTER GRADUATE)'));
+      const hasExpert = finalNewCerts.some(c => c.track === selectedTrack && c.rank === 'Expert' && !c.userName.includes('(MASTER GRADUATE)'));
+      const hasMaster = finalNewCerts.some(c => c.track === selectedTrack && c.userName.includes('(MASTER GRADUATE)'));
+
+      if (hasJunior && hasAnalyst && hasExpert && !hasMaster) {
+        const masterCert: UserCertificate = {
+          rank: 'Expert', // Master UI uses this as base
+          track: selectedTrack,
+          issuedAt: new Date().toLocaleDateString('pt-BR'),
+          userName: `${userName} (MASTER GRADUATE)`
+        };
+        finalNewCerts = [...finalNewCerts, masterCert];
+        triggeredCert = masterCert; // Prioritize showing the Master one if both triggered
+
+        // Persist Master certificate to Firestore
+        await setDoc(doc(db, 'users', user.uid, 'certificates', `${selectedTrack}-MASTER`), {
+          ...masterCert,
+          issuedAtServer: serverTimestamp()
+        });
+      }
+
+      if (triggeredCert) {
+        setCertificates(finalNewCerts);
+        setShowCert(triggeredCert);
       }
     }
   };
@@ -743,13 +774,24 @@ export default function App() {
                       Parabéns, {userName}! Você dominou todas as etapas da trilha {selectedTrack?.toUpperCase()} e agora é oficialmente um Especialista Master.
                    </p>
                    <button 
-                    onClick={() => {
+                    onClick={async () => {
                       const masterCert: UserCertificate = {
                         rank: 'Expert',
                         track: selectedTrack!,
                         issuedAt: new Date().toLocaleDateString('pt-BR'),
                         userName: `${userName} (MASTER GRADUATE)`
                       };
+                      
+                      const hasMaster = certificates.some(c => c.track === selectedTrack && c.userName.includes('(MASTER GRADUATE)'));
+                      if (!hasMaster) {
+                        setCertificates(prev => [...prev, masterCert]);
+                        if (user) {
+                          await setDoc(doc(db, 'users', user.uid, 'certificates', `${selectedTrack}-MASTER`), {
+                            ...masterCert,
+                            issuedAtServer: serverTimestamp()
+                          });
+                        }
+                      }
                       setShowCert(masterCert);
                     }}
                     className="px-10 py-4 bg-slate-900 text-white rounded-full font-black text-sm uppercase tracking-widest hover:bg-white hover:text-slate-900 transition-all flex items-center gap-3"
@@ -788,6 +830,9 @@ export default function App() {
               const diffChallenges = filteredChallenges.filter(c => c.difficulty === difficulty);
               if (diffChallenges.length === 0) return null;
 
+              const nonFinalChallenges = diffChallenges.filter(c => !c.isFinalTest);
+              const allNonFinalCompleted = nonFinalChallenges.every(c => completedIds.includes(c.id));
+              
               const completedCount = diffChallenges.filter(c => completedIds.includes(c.id)).length;
               const progressPct = (completedCount / diffChallenges.length) * 100;
               
@@ -840,13 +885,18 @@ export default function App() {
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {catChallenges.map((c) => {
                               const isCompleted = completedIds.includes(c.id);
+                              const actualIdx = filteredChallenges.findIndex(ch => ch.id === c.id);
+                              const prevChallenge = actualIdx > 0 ? filteredChallenges[actualIdx - 1] : null;
+                              const isLocked = prevChallenge && !completedIds.includes(prevChallenge.id);
+
                               return (
                                 <motion.button
                                   key={c.id}
-                                  whileHover={{ scale: 1.02, y: -2 }}
-                                  whileTap={{ scale: 0.98 }}
+                                  whileHover={!isLocked ? { scale: 1.02, y: -2 } : {}}
+                                  whileTap={!isLocked ? { scale: 0.98 } : {}}
+                                  disabled={isLocked}
                                   onClick={() => {
-                                    const actualIdx = filteredChallenges.findIndex(ch => ch.id === c.id);
+                                    if (isLocked) return;
                                     setCurrentChallengeIndex(actualIdx);
                                     setView('exercise');
                                   }}
@@ -854,32 +904,41 @@ export default function App() {
                                     relative p-5 rounded-xl border text-left transition-all group overflow-hidden h-full flex flex-col
                                     ${isCompleted 
                                       ? 'bg-slate-900 border-green-500/30 shadow-lg shadow-green-500/5' 
-                                      : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'}
+                                      : isLocked 
+                                        ? 'bg-slate-950/50 border-slate-900 opacity-50 cursor-not-allowed'
+                                        : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'}
                                   `}
                                 >
                                   <div className="flex justify-between items-start mb-4">
                                     <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest leading-none pt-1">#{c.id.split('-').pop()}</span>
-                                    {isCompleted && (
+                                    {isCompleted ? (
                                       <div className="bg-green-500/20 p-1 rounded">
                                         <ShieldCheck className="w-3 h-3 text-green-500" />
                                       </div>
+                                    ) : isLocked && (
+                                      <div className="bg-slate-800 p-1 rounded">
+                                        <X className="w-3 h-3 text-slate-600" />
+                                      </div>
                                     )}
                                   </div>
-                                  <h4 className={`font-bold mb-2 group-hover:text-sky-400 transition-colors text-sm leading-tight ${isCompleted ? 'text-slate-300' : 'text-white'}`}>
+                                  <h4 className={`font-bold mb-2 transition-colors text-sm leading-tight ${isCompleted ? 'text-slate-300' : isLocked ? 'text-slate-600' : 'text-white group-hover:text-sky-400'}`}>
                                     {c.title}
                                   </h4>
-                                  <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed flex-1">
+                                  <p className={`text-[11px] line-clamp-2 leading-relaxed flex-1 ${isLocked ? 'text-slate-700' : 'text-slate-500'}`}>
                                     {c.description}
                                   </p>
-                                  <div className="mt-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  
+                                  <div className={`mt-4 flex items-center gap-2 transition-opacity ${isLocked ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
                                     <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Iniciar</span>
                                     <Play className="w-2 h-2 text-sky-400" />
                                   </div>
                                   
-                                  <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-[30px] opacity-10 transition-colors ${
-                                    difficulty === 'Básico' ? 'bg-green-500' :
-                                    difficulty === 'Intermediário' ? 'bg-yellow-500' : 'bg-red-500'
-                                  }`} />
+                                  {!isLocked && (
+                                    <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-[30px] opacity-10 transition-colors ${
+                                      difficulty === 'Básico' ? 'bg-green-500' :
+                                      difficulty === 'Intermediário' ? 'bg-yellow-500' : 'bg-red-500'
+                                    }`} />
+                                  )}
                                 </motion.button>
                               );
                             })}
@@ -890,12 +949,24 @@ export default function App() {
 
                     {/* Final Test for this difficulty */}
                     {diffChallenges.some(c => c.isFinalTest) && (
-                      <div className="p-1 px-1 bg-gradient-to-r from-sky-500 via-purple-500 to-sky-500 rounded-[2rem]">
+                      <div className={`p-1 px-1 rounded-[2rem] transition-all ${allNonFinalCompleted ? 'bg-gradient-to-r from-sky-500 via-purple-500 to-sky-500 shadow-xl shadow-sky-500/20' : 'bg-slate-800'}`}>
                         <div className="w-full bg-[#0f172a] rounded-[1.9rem] p-8 md:p-12 relative overflow-hidden">
+                          {!allNonFinalCompleted && (
+                            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] z-20 flex items-center justify-center">
+                              <div className="flex flex-col items-center gap-4 text-center p-6">
+                                <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800">
+                                   <ShieldCheck className="w-10 h-10 text-slate-600" />
+                                </div>
+                                <h4 className="text-xl font-bold text-white">Exame de Mestria Bloqueado</h4>
+                                <p className="text-slate-400 text-sm max-w-[280px]">Complete todos os {nonFinalChallenges.length} desafios acima para liberar sua prova de certificação.</p>
+                              </div>
+                            </div>
+                          )}
+                          
                           <div className="absolute top-0 right-0 w-64 h-64 bg-sky-500/10 blur-[100px] rounded-full" />
                           <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
                             <div className="w-24 h-24 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center shadow-2xl">
-                               <Award className="w-12 h-12 text-yellow-500" />
+                               <Award className={`w-12 h-12 ${allNonFinalCompleted ? 'text-yellow-500' : 'text-slate-700'}`} />
                             </div>
                             <div className="flex-1 text-center md:text-left">
                               <h4 className="text-xs font-black text-sky-400 uppercase tracking-[0.4em] mb-2">Exame de Qualificação Final</h4>
@@ -908,15 +979,17 @@ export default function App() {
                                  <div className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${
                                    diffChallenges.filter(c => c.isFinalTest).every(c => completedIds.includes(c.id)) 
                                     ? 'bg-green-500/10 border-green-500/30 text-green-500' 
-                                    : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'
+                                    : allNonFinalCompleted ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' : 'bg-slate-800 border-slate-700 text-slate-500'
                                  }`}>
-                                    {diffChallenges.filter(c => c.isFinalTest).every(c => completedIds.includes(c.id)) ? 'Concluído' : 'Disponível'}
+                                    {diffChallenges.filter(c => c.isFinalTest).every(c => completedIds.includes(c.id)) ? 'Concluído' : allNonFinalCompleted ? 'Disponível' : 'Bloqueado'}
                                  </div>
                               </div>
                               <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
+                                whileHover={allNonFinalCompleted ? { scale: 1.05 } : {}}
+                                whileTap={allNonFinalCompleted ? { scale: 0.95 } : {}}
+                                disabled={!allNonFinalCompleted}
                                 onClick={() => {
+                                  if (!allNonFinalCompleted) return;
                                   const finalC = diffChallenges.find(c => c.isFinalTest);
                                   if (finalC) {
                                     const actualIdx = filteredChallenges.findIndex(ch => ch.id === finalC.id);
@@ -924,7 +997,11 @@ export default function App() {
                                     setView('exercise');
                                   }
                                 }}
-                                className="px-8 py-3 bg-white text-slate-900 rounded-full font-black text-xs uppercase tracking-widest hover:bg-sky-400 transition-colors shadow-xl shadow-white/5"
+                                className={`px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest transition-all shadow-xl ${
+                                  allNonFinalCompleted 
+                                    ? 'bg-white text-slate-900 hover:bg-sky-400 shadow-white/5' 
+                                    : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                                }`}
                               >
                                 {diffChallenges.filter(c => c.isFinalTest).every(c => completedIds.includes(c.id)) ? 'Refazer Teste' : 'Iniciar Prova Final'}
                               </motion.button>
