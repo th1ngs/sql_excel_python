@@ -133,6 +133,9 @@ export default function App() {
       setResults(res.data);
       if (res.data.length > 0) {
         validateResult(res.data[0]);
+      } else if (currentChallenge.expectedOutput.length === 0) {
+        setIsCorrect(true);
+        saveProgress(currentChallenge.id);
       } else {
         setIsCorrect(false);
       }
@@ -142,38 +145,82 @@ export default function App() {
   };
 
   const validateResult = (result: SqlResult) => {
-    // Convert SQL result to array of objects
-    const userOutput = result.values.map(row => {
-      const obj: any = {};
-      result.columns.forEach((col, i) => {
-        obj[col] = row[i];
-      });
-      return obj;
+    // Normalize numeric values for comparison
+    const normalize = (val: any) => {
+      if (typeof val === 'number') return Number(val.toFixed(4));
+      if (typeof val === 'string') return val.trim();
+      return val;
+    };
+
+    // User values without column names (just the data)
+    const userValues = result.values.map(row => row.map(normalize));
+    
+    // Expected values without column names
+    const expectedValues = currentChallenge.expectedOutput.map(obj => {
+      // Sort keys to ensure consistent order if we extract values
+      return Object.keys(obj).sort().map(key => normalize(obj[key]));
     });
 
-    const expectedProcessed = currentChallenge.expectedOutput.map(item => {
-      const ordered: any = {};
-      Object.keys(item).sort().forEach(key => ordered[key] = item[key]);
-      return ordered;
-    });
-
-    const userProcessed = userOutput.map(item => {
-      const ordered: any = {};
-      Object.keys(item).sort().forEach(key => ordered[key] = item[key]);
-      return ordered;
-    });
-
-    if (!currentChallenge.orderSensitive) {
-      expectedProcessed.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-      userProcessed.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    // Check dimensionality first
+    if (userValues.length !== expectedValues.length) {
+      setIsCorrect(false);
+      return;
     }
 
-    const expectedStr = JSON.stringify(expectedProcessed);
-    const userStr = JSON.stringify(userProcessed);
+    if (userValues.length > 0 && userValues[0].length !== expectedValues[0].length) {
+      setIsCorrect(false);
+      return;
+    }
 
-    if (expectedStr === userStr) {
-      setIsCorrect(true);
-      saveProgress(currentChallenge.id);
+    // Sort both if order doesn't matter
+    let userToCompare = [...userValues];
+    let expectedToCompare = [...expectedValues];
+
+    if (!currentChallenge.orderSensitive) {
+      const sortFn = (a: any[], b: any[]) => JSON.stringify(a).localeCompare(JSON.stringify(b));
+      userToCompare.sort(sortFn);
+      expectedToCompare.sort(sortFn);
+    }
+
+    const valuesMatch = JSON.stringify(userToCompare) === JSON.stringify(expectedToCompare);
+
+    if (valuesMatch) {
+      // Check if column names also match (strict check for aliases)
+      const userOutput = result.values.map(row => {
+        const obj: any = {};
+        result.columns.forEach((col, i) => { obj[col] = normalize(row[i]); });
+        return obj;
+      });
+
+      const expectedProcessed = currentChallenge.expectedOutput.map(item => {
+        const ordered: any = {};
+        Object.keys(item).sort().forEach(key => ordered[key] = normalize(item[key]));
+        return ordered;
+      });
+
+      const userProcessed = userOutput.map(item => {
+        const ordered: any = {};
+        Object.keys(item).sort().forEach(key => ordered[key] = normalize(item[key]));
+        return ordered;
+      });
+
+      if (!currentChallenge.orderSensitive) {
+        const sortFn = (a: any, b: any) => JSON.stringify(a).localeCompare(JSON.stringify(b));
+        expectedProcessed.sort(sortFn);
+        userProcessed.sort(sortFn);
+      }
+
+      const keysMatch = JSON.stringify(expectedProcessed) === JSON.stringify(userProcessed);
+
+      if (keysMatch) {
+        setIsCorrect(true);
+        saveProgress(currentChallenge.id);
+      } else {
+        // Values are correct, but column names are wrong
+        setIsCorrect(true); // Still consider correct for UX
+        saveProgress(currentChallenge.id);
+        setError("Dica: Os valores estão perfeitos! No exercício real, tente usar o nome da coluna exato (ex: 'AS total') para ser mais preciso.");
+      }
     } else {
       setIsCorrect(false);
     }
