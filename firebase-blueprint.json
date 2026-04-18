@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Basic information about the user",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["displayName", "email"]
+    },
+    "Progress": {
+      "title": "Challenge Progress",
+      "description": "Represents a completed challenge by a user",
+      "type": "object",
+      "properties": {
+        "challengeId": { "type": "string" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "track": { "type": "string" }
+      },
+      "required": ["challengeId", "track"]
+    },
+    "Certificate": {
+      "title": "Earned Certificate",
+      "description": "A certificate earned by completing a rank on a track",
+      "type": "object",
+      "properties": {
+        "rank": { "type": "string" },
+        "track": { "type": "string" },
+        "issuedAt": { "type": "string", "format": "date-time" },
+        "userName": { "type": "string" }
+      },
+      "required": ["rank", "track", "userName"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Global user profile documents"
+    },
+    "/users/{uid}/challenges/{challengeId}": {
+      "schema": "Progress",
+      "description": "Subcollection for tracking completed challenges per user"
+    },
+    "/users/{uid}/certificates/{certId}": {
+      "schema": "Certificate",
+      "description": "Subcollection for storing earned certificates per user"
+    }
+  }
+}

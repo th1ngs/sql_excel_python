@@ -21,9 +21,12 @@ export function ChallengeDetails({ challenge, isCorrect, error, hintVisible, set
             challenge.difficulty === 'Intermediário' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
             'bg-red-500/10 text-red-400 border border-red-500/20'
           }`}>
-            {challenge.difficulty}
+            {challenge.rank}
           </span>
           <span className="px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">
+            {challenge.difficulty}
+          </span>
+          <span className="px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider border border-slate-700 text-slate-500 italic">
             {challenge.category}
           </span>
         </div>

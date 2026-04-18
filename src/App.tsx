@@ -1,12 +1,16 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Database, Terminal, DatabaseZap, Award, ChevronLeft, ChevronRight, Menu, X, ShieldCheck, ArrowLeft, Play, LayoutGrid, FileSpreadsheet, Code2, Rocket, BrainCircuit } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Database, Terminal, DatabaseZap, Award, ChevronLeft, ChevronRight, Menu, X, ShieldCheck, ArrowLeft, Play, LayoutGrid, FileSpreadsheet, Code2, Rocket, BrainCircuit, Star, Download, Printer, Share2, LogOut, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { challenges } from './data/challenges';
 import { useSqlEngine } from './hooks/useSqlEngine';
-import { Challenge, SqlResult, Track } from './types';
+import { Challenge, SqlResult, Track, UserCertificate, Rank } from './types';
 import { SqlEditor } from './components/SqlEditor';
 import { DataTable } from './components/DataTable';
 import { ChallengeDetails } from './components/ChallengeDetails';
+import { AuthUI } from './components/Auth.tsx';
+import { auth, db } from './lib/firebase';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { collection, doc, getDocs, setDoc, serverTimestamp, query as fsQuery, where } from 'firebase/firestore';
 
 export default function App() {
   const [view, setView] = useState<'landing' | 'dashboard' | 'exercise'>('landing');
@@ -19,7 +23,13 @@ export default function App() {
   const [hintVisible, setHintVisible] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [completedIds, setCompletedIds] = useState<string[]>([]);
+  const [certificates, setCertificates] = useState<UserCertificate[]>([]);
+  const [userName, setUserName] = useState('Recruta');
+  const [showCert, setShowCert] = useState<UserCertificate | null>(null);
   const [schema, setSchema] = useState<{name: string, data: SqlResult}[]>([]);
+  
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const { loading, runQuery, getSchema } = useSqlEngine();
 
@@ -43,19 +53,73 @@ export default function App() {
     }
   }, [currentChallenge, loading, getSchema]);
 
-  // Load progress from localStorage
+  // Firebase Auth State
   useEffect(() => {
-    const saved = localStorage.getItem('sql-master-progress');
-    if (saved) {
-      setCompletedIds(JSON.parse(saved));
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      setAuthLoading(false);
+      
+      if (u) {
+        setUserName(u.displayName || 'Recruta');
+        // Fetch data from Firestore
+        try {
+          const challengesSnap = await getDocs(collection(db, 'users', u.uid, 'challenges'));
+          setCompletedIds(challengesSnap.docs.map(doc => doc.id));
+          
+          const certsSnap = await getDocs(collection(db, 'users', u.uid, 'certificates'));
+          setCertificates(certsSnap.docs.map(doc => doc.data() as UserCertificate));
+        } catch (e) {
+          console.error("Error fetching user data:", e);
+        }
+      } else {
+        setCompletedIds([]);
+        setCertificates([]);
+      }
+    });
+    return unsubscribe;
   }, []);
 
-  const saveProgress = (id: string) => {
+  const saveProgress = async (id: string) => {
+    if (!user) return;
+
+    let newIds = completedIds;
     if (!completedIds.includes(id)) {
-      const newIds = [...completedIds, id];
+      newIds = [...completedIds, id];
       setCompletedIds(newIds);
-      localStorage.setItem('sql-master-progress', JSON.stringify(newIds));
+      
+      const challenge = challenges.find(c => c.id === id);
+      if (challenge) {
+        // Persist to Firestore
+        await setDoc(doc(db, 'users', user.uid, 'challenges', id), {
+          challengeId: id,
+          track: challenge.track,
+          completedAt: serverTimestamp()
+        });
+      }
+    }
+
+    // Check for certificate
+    const challenge = challenges.find(c => c.id === id);
+    if (challenge?.isFinalTest && selectedTrack) {
+      const existing = certificates.find(cert => cert.rank === challenge.rank && cert.track === selectedTrack);
+      if (!existing) {
+        const newCert: UserCertificate = {
+          rank: challenge.rank,
+          track: selectedTrack,
+          issuedAt: new Date().toLocaleDateString('pt-BR'),
+          userName: userName
+        };
+        const newCerts = [...certificates, newCert];
+        setCertificates(newCerts);
+        
+        // Persist to Firestore
+        await setDoc(doc(db, 'users', user.uid, 'certificates', `${selectedTrack}-${challenge.rank}`), {
+          ...newCert,
+          issuedAtServer: serverTimestamp() // Better for rules, but issuedAt is for UI
+        });
+        
+        setShowCert(newCert);
+      }
     }
   };
 
@@ -127,13 +191,91 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  // Certificate Component
+  const CertificateModal = ({ cert, onClose }: { cert: UserCertificate, onClose: () => void }) => (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="max-w-4xl w-full bg-white text-slate-900 rounded-[2rem] overflow-hidden shadow-2xl relative"
+      >
+        <button 
+          onClick={onClose}
+          className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors z-20"
+        >
+          <X className="w-6 h-6 text-slate-400" />
+        </button>
+
+        <div className="p-12 text-center relative overflow-hidden">
+          {/* Decorative elements */}
+          <div className="absolute top-0 left-0 w-full h-4 bg-gradient-to-r from-sky-500 via-purple-500 to-sky-500" />
+          <div className="absolute -top-24 -left-24 w-64 h-64 bg-sky-100 rounded-full blur-3xl opacity-50" />
+          <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-purple-100 rounded-full blur-3xl opacity-50" />
+          
+          <div className="relative z-10 flex flex-col items-center">
+            <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mb-8">
+              <Award className="w-10 h-10 text-sky-600" />
+            </div>
+            
+            <h4 className="text-xs font-black uppercase tracking-[0.4em] text-sky-600 mb-2">Certificado de Conclusão</h4>
+            <h2 className="text-4xl font-serif text-slate-900 mb-8 italic">Data Lab Academy</h2>
+            
+            <div className="mb-8">
+              <p className="text-slate-500 uppercase tracking-widest text-[10px] mb-2 font-bold">Certificamos que</p>
+              <h3 className="text-3xl font-bold border-b-2 border-slate-100 pb-2 px-12 inline-block">{cert.userName}</h3>
+            </div>
+            
+            <p className="text-slate-600 max-w-lg mx-auto leading-relaxed mb-8">
+              Concluiu com êxito o módulo <span className="font-bold text-slate-900">{cert.rank}</span> na trilha de <span className="font-bold text-slate-900 uppercase">{cert.track}</span>, demonstrando domínio nas competências necessárias para manipulação e análise de dados.
+            </p>
+            
+            <div className="grid grid-cols-3 gap-12 w-full max-w-2xl border-t border-slate-100 pt-8">
+              <div>
+                <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Data de Emissão</p>
+                <p className="font-mono text-sm">{cert.issuedAt}</p>
+              </div>
+              <div className="flex justify-center flex-col items-center">
+                <div className="w-16 h-16 border-2 border-slate-200 rounded-lg flex items-center justify-center transform rotate-12 mb-2">
+                   <ShieldCheck className="w-8 h-8 text-slate-300" />
+                </div>
+                <p className="text-[8px] uppercase font-bold text-slate-400">Selo de Autenticidade</p>
+              </div>
+              <div className="flex flex-col items-center">
+                <div className="w-24 h-12 border-b border-slate-900 mb-1" />
+                <p className="text-[10px] uppercase font-bold text-slate-400">Coordenador Acadêmico</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-slate-50 p-6 flex items-center justify-center gap-4">
+          <button className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-full font-bold text-sm hover:bg-sky-600 transition-all">
+             <Download className="w-4 h-4" /> Download PDF
+          </button>
+          <button className="flex items-center gap-2 px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-full font-bold text-sm hover:bg-slate-100 transition-all">
+             <Share2 className="w-4 h-4" /> Compartilhar
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-sky-400">
         <div className="flex flex-col items-center gap-4">
           <DatabaseZap className="w-12 h-12 animate-bounce" />
-          <h1 className="text-xl font-mono terminal-anim">Inicializando Kernel SQL...</h1>
+          <h1 className="text-xl font-mono terminal-anim">Conectando ao Lab...</h1>
         </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_transparent_70%)] from-sky-500/10">
+        <AuthUI onAuthSuccess={() => {}} />
       </div>
     );
   }
@@ -142,6 +284,13 @@ export default function App() {
   if (view === 'landing') {
     return (
       <div className="min-h-screen bg-[#0f172a] text-slate-200 flex flex-col justify-center items-center p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_transparent_70%)] from-sky-500/10">
+        {/* Certificate Modal */}
+        <AnimatePresence>
+          {showCert && (
+            <CertificateModal cert={showCert} onClose={() => setShowCert(null)} />
+          )}
+        </AnimatePresence>
+
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -154,6 +303,11 @@ export default function App() {
             </h1>
           </div>
           <p className="text-slate-400 text-lg max-w-lg mx-auto">Sua jornada para o domínio de dados começa aqui. Escolha uma trilha e torne-se um especialista.</p>
+          
+          <div className="mt-8 flex flex-col items-center gap-1">
+             <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Seja bem-vindo,</p>
+             <h4 className="text-xl font-bold text-white tracking-tight">{user?.displayName}</h4>
+          </div>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full">
@@ -214,6 +368,23 @@ export default function App() {
           </button>
           
           <div className="flex items-center gap-4">
+             <button 
+               onClick={() => signOut(auth)}
+               className="flex items-center gap-2 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-full border border-red-500/30 text-red-500 transition-colors mr-2"
+               title="Sair"
+             >
+               <LogOut className="w-4 h-4" />
+               <span className="text-[10px] font-bold uppercase hidden sm:inline">Sair</span>
+             </button>
+             {certificates.length > 0 && (
+               <button 
+                 onClick={() => setShowCert(certificates[certificates.length - 1])}
+                 className="flex items-center gap-2 px-3 py-1 bg-sky-500/10 hover:bg-sky-500/20 rounded-full border border-sky-500/30 text-sky-400 transition-colors"
+                >
+                 <Award className="w-4 h-4" />
+                 <span className="text-[10px] font-bold uppercase">Meus Certificados</span>
+               </button>
+             )}
              <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
               <Award className="w-4 h-4 text-yellow-500" />
               <span className="text-xs font-bold text-slate-300">
@@ -221,7 +392,9 @@ export default function App() {
               </span>
             </div>
             <div className="w-8 h-8 rounded-full bg-sky-500/20 flex items-center justify-center border border-sky-500/30">
-              <span className="text-xs font-bold text-sky-400">WM</span>
+              <span className="text-xs font-bold text-sky-400">
+                {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U'}
+              </span>
             </div>
           </div>
         </nav>
@@ -232,23 +405,122 @@ export default function App() {
               Trilha: {selectedTrack?.toUpperCase()}
             </div>
             <h2 className="text-3xl font-bold text-white mb-2">Bem-vindo, Comandante {selectedTrack === 'sql' ? 'SQL' : selectedTrack === 'excel' ? 'Excel' : 'Python'}</h2>
-            <p className="text-slate-400 max-w-2xl">Escolha um módulo para começar seu treinamento. Do básico ao avançado, domine a arte de consultar dados.</p>
+            <p className="text-slate-400 max-w-2xl mb-8">Sua jornada do Junior ao Expert começa aqui. Complete os módulos para subir de nível.</p>
+            
+            {/* Career Path Visualization */}
+            <div className="grid grid-cols-3 gap-4 mb-12 relative">
+              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-800 -translate-y-1/2 z-0" />
+              {[
+                { rank: 'Junior', label: 'Iniciante', color: 'bg-green-500' },
+                { rank: 'Analyst', label: 'Especialista', color: 'bg-yellow-500' },
+                { rank: 'Expert', label: 'Mestre', color: 'bg-red-500' }
+              ].map((step, i) => {
+                const isReached = filteredChallenges.some(c => c.rank === step.rank && completedIds.includes(c.id));
+                const allDone = filteredChallenges.filter(c => c.rank === step.rank).every(c => completedIds.includes(c.id));
+                
+                return (
+                  <div key={step.rank} className="relative z-10 flex flex-col items-center">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center border-4 border-[#0f172a] transition-all duration-500 ${
+                      allDone ? step.color : isReached ? 'bg-slate-700' : 'bg-slate-900 border-slate-800'
+                    }`}>
+                      <span className="text-[10px] font-bold text-white">{i + 1}</span>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-tighter mt-2 ${allDone ? 'text-white' : 'text-slate-500'}`}>
+                      {step.rank}
+                    </span>
+                    <span className="text-[8px] text-slate-600 uppercase tracking-[0.2em]">{step.label}</span>
+                  </div>
+                );
+              })}
+            </div>
           </header>
 
-          <div className="space-y-12">
+          <div className="space-y-16">
+            {/* Master Graduation Banner */}
+            {certificates.filter(c => c.track === selectedTrack).length === 3 && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="relative overflow-hidden p-12 rounded-[3rem] bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-600 text-center shadow-2xl shadow-yellow-500/20 mb-16"
+              >
+                <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
+                   <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full blur-3xl" />
+                   <div className="absolute bottom-10 right-10 w-32 h-32 bg-white rounded-full blur-3xl" />
+                </div>
+                <div className="relative z-10 flex flex-col items-center">
+                   <div className="w-24 h-24 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mb-6 shadow-inner">
+                      <Star className="w-12 h-12 text-white fill-white animate-pulse" />
+                   </div>
+                   <h2 className="text-4xl font-black text-white mb-2 tracking-tighter uppercase">Graduação Master Completa!</h2>
+                   <p className="text-white/80 max-w-lg mx-auto text-lg font-medium mb-8">
+                      Parabéns, {userName}! Você dominou todas as etapas da trilha {selectedTrack?.toUpperCase()} e agora é oficialmente um Especialista Master.
+                   </p>
+                   <button 
+                    onClick={() => {
+                      const masterCert: UserCertificate = {
+                        rank: 'Expert',
+                        track: selectedTrack!,
+                        issuedAt: new Date().toLocaleDateString('pt-BR'),
+                        userName: `${userName} (MASTER GRADUATE)`
+                      };
+                      setShowCert(masterCert);
+                    }}
+                    className="px-10 py-4 bg-slate-900 text-white rounded-full font-black text-sm uppercase tracking-widest hover:bg-white hover:text-slate-900 transition-all flex items-center gap-3"
+                   >
+                     Solicitar Diploma Master <Award className="w-5 h-5" />
+                   </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Certificated Awards if any */}
+            {certificates.filter(c => c.track === selectedTrack).length > 0 && (
+              <div className="bg-sky-500/5 border border-sky-500/10 rounded-3xl p-6 flex flex-wrap items-center gap-6">
+                 <div className="w-12 h-12 rounded-2xl bg-sky-500/20 flex items-center justify-center">
+                    <Award className="w-6 h-6 text-sky-400" />
+                 </div>
+                 <div>
+                    <h4 className="font-bold text-white">Certificados Conquistados</h4>
+                    <p className="text-xs text-slate-500 tracking-tight">Você já provou seu valor nestes níveis da trilha.</p>
+                 </div>
+                 <div className="flex gap-2">
+                    {certificates.filter(c => c.track === selectedTrack).map(cert => (
+                      <button 
+                        key={cert.rank}
+                        onClick={() => setShowCert(cert)}
+                        className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-bold text-sky-400 hover:border-sky-500/50 transition-all flex items-center gap-2"
+                      >
+                         {cert.rank} <Star className="w-3 h-3 fill-sky-400" />
+                      </button>
+                    ))}
+                 </div>
+              </div>
+            )}
+
             {['Básico', 'Intermediário', 'Avançado'].map(difficulty => {
               const diffChallenges = filteredChallenges.filter(c => c.difficulty === difficulty);
               if (diffChallenges.length === 0) return null;
 
               const completedCount = diffChallenges.filter(c => completedIds.includes(c.id)).length;
               const progressPct = (completedCount / diffChallenges.length) * 100;
+              
+              // Group by category
+              const categories = Array.from(new Set(diffChallenges.map(c => c.category)));
 
               return (
-                <section key={difficulty} className="space-y-6">
+                <section key={difficulty} className="space-y-8">
                   <div className="flex items-end justify-between border-b border-slate-800 pb-2">
-                    <div>
-                      <h3 className="text-lg font-bold text-white">{difficulty}</h3>
-                      <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest">Módulo {difficulty === 'Básico' ? '01' : difficulty === 'Intermediário' ? '02' : '03'}</p>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-8 rounded-full ${
+                         difficulty === 'Básico' ? 'bg-green-500' :
+                         difficulty === 'Intermediário' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`} />
+                      <div>
+                        <h3 className="text-xl font-bold text-white">{difficulty}</h3>
+                        <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest">
+                          Módulo {difficulty === 'Básico' ? '01 · Junior' : difficulty === 'Intermediário' ? '02 · Analyst' : '03 · Expert'}
+                        </p>
+                      </div>
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-mono text-slate-400">{completedCount}/{diffChallenges.length}</span>
@@ -265,53 +537,115 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {diffChallenges.map((c, idx) => {
-                      const isCompleted = completedIds.includes(c.id);
+                  <div className="space-y-12">
+                    {Array.from(new Set(diffChallenges.filter(c => !c.isFinalTest).map(c => c.category))).map(category => {
+                      const catChallenges = diffChallenges.filter(c => c.category === category && !c.isFinalTest);
                       return (
-                        <motion.button
-                          key={c.id}
-                          whileHover={{ scale: 1.02, y: -2 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            const actualIdx = filteredChallenges.findIndex(ch => ch.id === c.id);
-                            setCurrentChallengeIndex(actualIdx);
-                            setView('exercise');
-                          }}
-                          className={`
-                            relative p-5 rounded-xl border text-left transition-all group overflow-hidden
-                            ${isCompleted 
-                              ? 'bg-slate-900 border-green-500/30' 
-                              : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'}
-                          `}
-                        >
-                          <div className="flex justify-between items-start mb-4">
-                            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">{selectedTrack}-{idx + 1}</span>
-                            {isCompleted && (
-                              <div className="bg-green-500/20 p-1 rounded">
-                                <ShieldCheck className="w-4 h-4 text-green-500" />
-                              </div>
-                            )}
-                          </div>
-                          <h4 className={`font-bold mb-2 group-hover:text-sky-400 transition-colors ${isCompleted ? 'text-slate-300' : 'text-white'}`}>
-                            {c.title}
-                          </h4>
-                          <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                            {c.description}
-                          </p>
-                          <div className="mt-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Iniciar Desafio</span>
-                            <Play className="w-3 h-3 text-sky-400" />
+                        <div key={category} className="space-y-4 p-6 bg-slate-900/30 rounded-2xl border border-slate-800/50">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-sm font-bold text-sky-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                              {selectedTrack === 'sql' ? <Database className="w-4 h-4" /> : selectedTrack === 'excel' ? <FileSpreadsheet className="w-4 h-4" /> : <Code2 className="w-4 h-4" />}
+                              {category}
+                            </h4>
+                            <span className="text-[10px] text-slate-600 font-mono">{catChallenges.length} Desafios</span>
                           </div>
                           
-                          {/* Card background glow */}
-                          <div className={`absolute -right-4 -bottom-4 w-16 h-16 rounded-full blur-[40px] opacity-20 transition-colors ${
-                            difficulty === 'Básico' ? 'bg-green-500' :
-                            difficulty === 'Intermediário' ? 'bg-yellow-500' : 'bg-red-500'
-                          }`} />
-                        </motion.button>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {catChallenges.map((c) => {
+                              const isCompleted = completedIds.includes(c.id);
+                              return (
+                                <motion.button
+                                  key={c.id}
+                                  whileHover={{ scale: 1.02, y: -2 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  onClick={() => {
+                                    const actualIdx = filteredChallenges.findIndex(ch => ch.id === c.id);
+                                    setCurrentChallengeIndex(actualIdx);
+                                    setView('exercise');
+                                  }}
+                                  className={`
+                                    relative p-5 rounded-xl border text-left transition-all group overflow-hidden h-full flex flex-col
+                                    ${isCompleted 
+                                      ? 'bg-slate-900 border-green-500/30 shadow-lg shadow-green-500/5' 
+                                      : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'}
+                                  `}
+                                >
+                                  <div className="flex justify-between items-start mb-4">
+                                    <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest leading-none pt-1">#{c.id.split('-').pop()}</span>
+                                    {isCompleted && (
+                                      <div className="bg-green-500/20 p-1 rounded">
+                                        <ShieldCheck className="w-3 h-3 text-green-500" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <h4 className={`font-bold mb-2 group-hover:text-sky-400 transition-colors text-sm leading-tight ${isCompleted ? 'text-slate-300' : 'text-white'}`}>
+                                    {c.title}
+                                  </h4>
+                                  <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed flex-1">
+                                    {c.description}
+                                  </p>
+                                  <div className="mt-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Iniciar</span>
+                                    <Play className="w-2 h-2 text-sky-400" />
+                                  </div>
+                                  
+                                  <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-[30px] opacity-10 transition-colors ${
+                                    difficulty === 'Básico' ? 'bg-green-500' :
+                                    difficulty === 'Intermediário' ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`} />
+                                </motion.button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       );
                     })}
+
+                    {/* Final Test for this difficulty */}
+                    {diffChallenges.some(c => c.isFinalTest) && (
+                      <div className="p-1 px-1 bg-gradient-to-r from-sky-500 via-purple-500 to-sky-500 rounded-[2rem]">
+                        <div className="w-full bg-[#0f172a] rounded-[1.9rem] p-8 md:p-12 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-500/10 blur-[100px] rounded-full" />
+                          <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+                            <div className="w-24 h-24 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center shadow-2xl">
+                               <Award className="w-12 h-12 text-yellow-500" />
+                            </div>
+                            <div className="flex-1 text-center md:text-left">
+                              <h4 className="text-xs font-black text-sky-400 uppercase tracking-[0.4em] mb-2">Exame de Qualificação Final</h4>
+                              <h3 className="text-3xl font-black text-white mb-4">Teste de Mestria {difficulty}</h3>
+                              <p className="text-slate-400 text-sm max-w-xl">Este teste final integra todos os conceitos aprendidos no módulo. Ao completar este desafio com sucesso, você receberá seu Certificado de Especialização.</p>
+                            </div>
+                            <div className="flex flex-col items-center gap-4">
+                              <div className="text-center">
+                                 <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Status do Exame</p>
+                                 <div className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${
+                                   diffChallenges.filter(c => c.isFinalTest).every(c => completedIds.includes(c.id)) 
+                                    ? 'bg-green-500/10 border-green-500/30 text-green-500' 
+                                    : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'
+                                 }`}>
+                                    {diffChallenges.filter(c => c.isFinalTest).every(c => completedIds.includes(c.id)) ? 'Concluído' : 'Disponível'}
+                                 </div>
+                              </div>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => {
+                                  const finalC = diffChallenges.find(c => c.isFinalTest);
+                                  if (finalC) {
+                                    const actualIdx = filteredChallenges.findIndex(ch => ch.id === finalC.id);
+                                    setCurrentChallengeIndex(actualIdx);
+                                    setView('exercise');
+                                  }
+                                }}
+                                className="px-8 py-3 bg-white text-slate-900 rounded-full font-black text-xs uppercase tracking-widest hover:bg-sky-400 transition-colors shadow-xl shadow-white/5"
+                              >
+                                {diffChallenges.filter(c => c.isFinalTest).every(c => completedIds.includes(c.id)) ? 'Refazer Teste' : 'Iniciar Prova Final'}
+                              </motion.button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </section>
               );
