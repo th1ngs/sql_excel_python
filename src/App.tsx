@@ -9,6 +9,7 @@ import { DataTable } from './components/DataTable';
 import { ChallengeDetails } from './components/ChallengeDetails';
 import { AuthUI } from './components/Auth.tsx';
 import { auth, db } from './lib/firebase';
+import { translateToSql } from './lib/polyglot';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { collection, doc, getDocs, setDoc, serverTimestamp, query as fsQuery, where } from 'firebase/firestore';
 
@@ -159,7 +160,16 @@ export default function App() {
     setError(undefined);
     setIsCorrect(null);
     
-    const res = runQuery(currentChallenge.tableSetup, query);
+    // Polyglot transformation
+    let effectiveQuery = query;
+    if (selectedTrack && currentChallenge) {
+      // Get primary table name from setup (crudely for simple exercises)
+      const tableNameMatch = currentChallenge.tableSetup[0].match(/CREATE TABLE (\w+)/);
+      const tableName = tableNameMatch ? tableNameMatch[1] : 'tabela';
+      effectiveQuery = translateToSql(query, selectedTrack, tableName);
+    }
+
+    const res = runQuery(currentChallenge.tableSetup, effectiveQuery);
     
     if (res.success && res.data) {
       setResults(res.data);
@@ -1104,6 +1114,7 @@ export default function App() {
                 error={error}
                 hintVisible={hintVisible}
                 setHintVisible={setHintVisible}
+                track={selectedTrack || 'sql'}
               />
 
               {isCorrect && (
@@ -1153,24 +1164,72 @@ export default function App() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                    <DatabaseZap className="w-4 h-4" />
-                    Tabelas Disponíveis
+                    {selectedTrack === 'sql' ? (
+                      <DatabaseZap className="w-4 h-4" />
+                    ) : selectedTrack === 'excel' ? (
+                      <FileSpreadsheet className="w-4 h-4" />
+                    ) : (
+                      <Terminal className="w-4 h-4" />
+                    )}
+                    {selectedTrack === 'sql' ? 'Tabelas Disponíveis' : selectedTrack === 'excel' ? 'Dados da Planilha' : 'DataFrames de Entrada'}
                   </h3>
                 </div>
                 <div className="space-y-6">
-                  {schema.map((table) => (
-                    <div key={table.name} className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-sky-500/10 text-sky-400 text-[11px] font-mono font-bold rounded border border-sky-500/20">
-                          {table.name}
+                  {selectedTrack === 'excel' ? (
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                      <div className="p-4 bg-slate-800/50 border-b border-slate-700">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                          <FileSpreadsheet className="w-4 h-4 text-green-500" />
+                          Workbook: Desafio_{currentChallenge.id}.xlsx
                         </span>
                       </div>
-                      <DataTable result={table.data} />
+                      <div className="p-2 flex gap-1 bg-slate-900 overflow-x-auto no-scrollbar border-b border-slate-800">
+                        {schema.map((table, idx) => (
+                          <button
+                            key={table.name}
+                            onClick={() => {
+                              // We can store a local state for active sheet if we want, 
+                              // but for simplicity let's show all or just the first for now.
+                              // Actually, let's just render them as clear sections.
+                            }}
+                            className={`px-3 py-1.5 text-[11px] font-bold rounded flex items-center gap-2 whitespace-nowrap transition-all ${
+                              idx === 0 ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'text-slate-500 hover:text-slate-400'
+                            }`}
+                          >
+                            Sheet: {table.name}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="p-4 space-y-8">
+                        {schema.map((table) => (
+                          <div key={table.name} className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <div className="h-px bg-slate-800 flex-1"></div>
+                              <span className="text-[10px] uppercase tracking-tighter text-slate-600 font-bold whitespace-nowrap">
+                                Dados da Planilha: {table.name}
+                              </span>
+                              <div className="h-px bg-slate-800 flex-1"></div>
+                            </div>
+                            <DataTable result={table.data} variant="excel" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  ) : (
+                    schema.map((table) => (
+                      <div key={table.name} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 bg-sky-500/10 text-sky-400 text-[11px] font-mono font-bold rounded border border-sky-500/20 uppercase tracking-tight">
+                            {selectedTrack === 'python' ? `DataFrame: ${table.name}` : `Tabela: ${table.name}`}
+                          </span>
+                        </div>
+                        <DataTable result={table.data} variant={selectedTrack || 'sql'} />
+                      </div>
+                    ))
+                  )}
                   {schema.length === 0 && (
                     <div className="p-4 border border-dashed border-slate-700 rounded-lg text-center text-slate-500 text-sm">
-                      Nenhuma tabela definida para este exercício.
+                      Nenhuma fonte de dados definida para este exercício.
                     </div>
                   )}
                 </div>
@@ -1180,15 +1239,17 @@ export default function App() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                     <Terminal className="w-4 h-4" />
-                    Resultado da sua Query
+                    {selectedTrack === 'sql' ? 'Resultado da sua Query' : selectedTrack === 'excel' ? 'Resultado da sua Fórmula' : 'Resultado do seu Script'}
                   </h3>
                 </div>
                 <div className="min-h-[200px]">
                   {results.length > 0 ? (
-                    <DataTable result={results[0]} />
+                    <DataTable result={results[0]} variant={selectedTrack || 'sql'} />
                   ) : (
                     <div className="h-48 border border-dashed border-slate-700 rounded-lg flex items-center justify-center bg-slate-900/10">
-                      <p className="text-slate-500 text-sm italic">Execute sua query para ver os resultados.</p>
+                      <p className="text-slate-500 text-sm italic">
+                        {selectedTrack === 'sql' ? 'Execute sua query para ver os resultados.' : selectedTrack === 'excel' ? 'Execute sua fórmula para ver os resultados.' : 'Execute seu script para ver os resultados.'}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -1202,6 +1263,7 @@ export default function App() {
                   query={query}
                   setQuery={setQuery}
                   onRun={handleRun}
+                  track={selectedTrack || 'sql'}
                 />
               </div>
             </div>

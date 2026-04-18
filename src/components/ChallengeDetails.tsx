@@ -9,9 +9,25 @@ interface ChallengeDetailsProps {
   error?: string;
   hintVisible: boolean;
   setHintVisible: (v: boolean) => void;
+  track?: string;
 }
 
-export function ChallengeDetails({ challenge, isCorrect, error, hintVisible, setHintVisible }: ChallengeDetailsProps) {
+export function ChallengeDetails({ challenge, isCorrect, error, hintVisible, setHintVisible, track }: ChallengeDetailsProps) {
+  const isExcel = track === 'excel';
+  const isPython = track === 'python';
+
+  const successMessage = isExcel 
+    ? "Excelente! Sua fórmula retornou o resultado esperado." 
+    : isPython 
+      ? "Excelente! Seu script processou os dados corretamente." 
+      : "Excelente! Você acertou a query SQL.";
+
+  const errorMessage = isExcel 
+    ? "Erro na Fórmula" 
+    : isPython 
+      ? "Erro de Script" 
+      : "Erro de Sintaxe SQL";
+
   return (
     <div className="space-y-6">
       <div>
@@ -42,7 +58,7 @@ export function ChallengeDetails({ challenge, isCorrect, error, hintVisible, set
             className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400"
           >
             <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            <span className="font-medium">Excelente! Você acertou a query.</span>
+            <span className="font-medium">{successMessage}</span>
           </motion.div>
         )}
 
@@ -65,7 +81,7 @@ export function ChallengeDetails({ challenge, isCorrect, error, hintVisible, set
           >
             <XCircle className="w-5 h-5 flex-shrink-0" />
             <div className="flex flex-col">
-              <span className="font-bold text-sm uppercase">Erro de Sintaxe SQL</span>
+              <span className="font-bold text-sm uppercase">{errorMessage}</span>
               <span className="text-sm font-mono opacity-80">{error}</span>
             </div>
           </motion.div>
