@@ -27,6 +27,7 @@ export default function App() {
   const [userName, setUserName] = useState('Recruta');
   const [showCert, setShowCert] = useState<UserCertificate | null>(null);
   const [schema, setSchema] = useState<{name: string, data: SqlResult}[]>([]);
+  const [landingTab, setLandingTab] = useState<'explore' | 'me'>('explore');
   
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -359,10 +360,15 @@ export default function App() {
     );
   }
 
-  // Landing View (Track Selection)
+  // Landing View (Track Selection & Member Area)
   if (view === 'landing') {
+    const activeTrackIds = Array.from(new Set(challenges.filter(c => completedIds.includes(c.id)).map(c => c.track)));
+    
     return (
-      <div className="min-h-screen bg-[#0f172a] text-slate-200 flex flex-col justify-center items-center p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_transparent_70%)] from-sky-500/10">
+      <div className="min-h-screen bg-[#0f172a] text-slate-200 flex flex-col p-6 overflow-x-hidden">
+        {/* Background effects */}
+        <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_transparent_70%)] from-sky-500/10 pointer-events-none" />
+
         {/* Certificate Modal */}
         <AnimatePresence>
           {showCert && (
@@ -370,59 +376,261 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-16"
-        >
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <Rocket className="w-10 h-10 text-sky-400" />
-            <h1 className="text-5xl font-black tracking-tighter text-white uppercase">
-              Analyst <span className="text-sky-400">Master</span>
-            </h1>
-          </div>
-          <p className="text-slate-400 text-lg max-w-lg mx-auto">Sua jornada para o domínio analítico começa aqui. Escolha uma trilha e torne-se um especialista.</p>
-          
-          <div className="mt-8 flex flex-col items-center gap-1">
-             <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Seja bem-vindo,</p>
-             <h4 className="text-xl font-bold text-white tracking-tight">{user?.displayName}</h4>
-          </div>
-        </motion.div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full">
-          {[
-            { id: 'sql', title: 'SQL Master', icon: Database, color: 'text-sky-400', bg: 'bg-sky-400/10', border: 'border-sky-400/20', desc: 'Aprenda a consultar e manipular bancos de dados relacionais.' },
-            { id: 'excel', title: 'Excel Avançado', icon: FileSpreadsheet, color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20', desc: 'Domine fórmulas, lógica e estruturação de planilhas.' },
-            { id: 'python', title: 'Python Data', icon: Code2, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20', desc: 'Introdução à programação para análise de dados.' }
-          ].map(track => (
-            <motion.button
-              key={track.id}
-              whileHover={{ y: -8, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                setSelectedTrack(track.id as Track);
-                setView('dashboard');
-                setCurrentChallengeIndex(0);
-              }}
-              className={`p-8 rounded-3xl border ${track.border} bg-slate-900/50 backdrop-blur-sm hover:bg-slate-900 transition-all text-left flex flex-col h-full group`}
-            >
-              <div className={`p-4 rounded-2xl ${track.bg} w-fit mb-6 group-hover:scale-110 transition-transform`}>
-                <track.icon className={`w-8 h-8 ${track.color}`} />
+        <div className="max-w-7xl w-full mx-auto relative z-10 py-12">
+          {/* Header */}
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-20 animate-in fade-in slide-in-from-top-4 duration-1000">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-sky-500 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20">
+                <Rocket className="w-7 h-7 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">{track.title}</h3>
-              <p className="text-slate-400 text-sm leading-relaxed mb-8 flex-1">{track.desc}</p>
-              <div className="flex items-center gap-2 text-sky-400 font-bold text-sm">
-                Acessar Trilha <ChevronRight className="w-4 h-4" />
+              <div>
+                <h1 className="text-3xl font-black tracking-tighter text-white uppercase leading-none">
+                  Analyst <span className="text-sky-400">Master</span>
+                </h1>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-1">Sua jornada analítica profissional</p>
               </div>
-            </motion.button>
-          ))}
-        </div>
+            </div>
 
-        <div className="mt-20 flex items-center gap-8 opacity-40">
-           <BrainCircuit className="w-6 h-6" />
-           <span className="h-px w-20 bg-slate-700" />
-           <p className="text-xs font-mono uppercase tracking-[0.2em]">Data Engineering Training System v2.0</p>
-           <span className="h-px w-20 bg-slate-700" />
+            <div className="flex items-center gap-2 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5">
+              <button 
+                onClick={() => setLandingTab('explore')}
+                className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${landingTab === 'explore' ? 'bg-sky-500 text-slate-950 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              >
+                <LayoutGrid className="w-4 h-4" /> Explorar Trilhas
+              </button>
+              <button 
+                onClick={() => setLandingTab('me')}
+                className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${landingTab === 'me' ? 'bg-sky-500 text-slate-950 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              >
+                <User className="w-4 h-4" /> Minha Área
+              </button>
+            </div>
+          </header>
+
+          <AnimatePresence mode="wait">
+            {landingTab === 'explore' ? (
+              <motion.div 
+                key="explore"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-12"
+              >
+                <div className="max-w-2xl">
+                  <h2 className="text-4xl font-black text-white tracking-tighter mb-4">Escolha sua <span className="text-sky-400 tracking-normal">Trilha de Sucesso</span></h2>
+                  <p className="text-slate-400 text-lg">Domine as ferramentas mais requisitadas pelo mercado com nossa metodologia prática e baseada em desafios reais.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {[
+                    { id: 'sql', title: 'SQL Master', icon: Database, color: 'text-sky-400', bg: 'bg-sky-400/10', border: 'border-sky-400/20', desc: 'Aprenda a consultar e manipular bancos de dados relacionais com eficiência.' },
+                    { id: 'excel', title: 'Excel Avançado', icon: FileSpreadsheet, color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20', desc: 'Domine fórmulas, lógica preditiva e estruturação de planilhas dinâmicas.' },
+                    { id: 'python', title: 'Python Data', icon: Code2, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20', desc: 'Introdução à programação para análise e automação de processamento de dados.' }
+                  ].map(track => (
+                    <motion.button
+                      key={track.id}
+                      whileHover={{ y: -8, scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setSelectedTrack(track.id as Track);
+                        setView('dashboard');
+                        setCurrentChallengeIndex(0);
+                      }}
+                      className={`p-8 rounded-[2.5rem] border ${track.border} bg-slate-900/50 backdrop-blur-sm hover:bg-slate-900 transition-all text-left flex flex-col h-full group`}
+                    >
+                      <div className={`p-5 rounded-2xl ${track.bg} w-fit mb-8 group-hover:scale-110 transition-transform`}>
+                        <track.icon className={`w-10 h-10 ${track.color}`} />
+                      </div>
+                      <h3 className="text-2xl font-black text-white mb-3 tracking-tight">{track.title}</h3>
+                      <p className="text-slate-400 text-sm leading-relaxed mb-10 flex-1">{track.desc}</p>
+                      <div className="flex items-center gap-3 text-sky-400 font-black text-xs uppercase tracking-widest mt-auto">
+                        Começar Agora <ChevronRight className="w-4 h-4" />
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="me"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-16"
+              >
+                {/* Profile Header Card */}
+                <div className="bg-slate-900/80 backdrop-blur-xl border border-white/5 rounded-[3rem] p-10 md:p-16 relative overflow-hidden flex flex-col md:flex-row items-center gap-12 text-center md:text-left">
+                  <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-[100px] -mr-48 -mt-48" />
+                  <div className="w-32 h-32 bg-sky-500 p-1 rounded-full relative">
+                    <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center">
+                       <User className="w-16 h-16 text-sky-400" />
+                    </div>
+                    <div className="absolute -bottom-2 -right-2 bg-green-500 w-8 h-8 rounded-full border-4 border-slate-900 shadow-lg" />
+                  </div>
+                  <div className="space-y-4 relative z-10 flex-1">
+                    <div className="space-y-1">
+                      <p className="text-xs font-black text-sky-400 uppercase tracking-[0.4em]">Membro Verificado</p>
+                      <h2 className="text-5xl font-black text-white tracking-tighter capitalize">{user?.displayName?.toLowerCase()}</h2>
+                    </div>
+                    <p className="text-slate-400 text-lg font-medium max-w-xl">
+                      Progredindo na jornada Analyst Master com {completedIds.length} desafios completados e {certificates.length} certificados obtidos.
+                    </p>
+                    <div className="pt-4">
+                      <button 
+                        onClick={() => signOut(auth)}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl font-bold text-sm hover:bg-red-500 hover:text-white transition-all mx-auto md:mx-0"
+                      >
+                         <LogOut className="w-4 h-4" /> Sair da Conta
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* My Tracks Section */}
+                <section className="space-y-8">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-sky-400/10 rounded-xl border border-sky-400/20">
+                      <DatabaseZap className="w-6 h-6 text-sky-400" />
+                    </div>
+                    <div>
+                       <h3 className="text-2xl font-black text-white tracking-tighter">Minhas Trilhas</h3>
+                       <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Trilhas que você já iniciou</p>
+                    </div>
+                  </div>
+                  
+                  {activeTrackIds.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      {activeTrackIds.map(trackId => {
+                         const trackMap: Record<string, any> = {
+                           'sql': { title: 'SQL Master', icon: Database, color: 'text-sky-400', bg: 'bg-sky-400/5', border: 'border-sky-400/10' },
+                           'excel': { title: 'Excel Avançado', icon: FileSpreadsheet, color: 'text-green-400', bg: 'bg-green-400/5', border: 'border-green-400/10' },
+                           'python': { title: 'Python Data', icon: Code2, color: 'text-yellow-400', bg: 'bg-yellow-400/5', border: 'border-yellow-400/10' }
+                         };
+                         const track = trackMap[trackId];
+                         if (!track) return null;
+                         
+                         const progress = Math.round((challenges.filter(c => c.track === trackId && completedIds.includes(c.id)).length / challenges.filter(c => c.track === trackId).length) * 100);
+
+                         return (
+                           <button
+                             key={trackId}
+                             onClick={() => {
+                               setSelectedTrack(trackId as Track);
+                               setView('dashboard');
+                               setCurrentChallengeIndex(0);
+                             }}
+                             className="p-8 bg-slate-900/40 border border-slate-800 rounded-[2.5rem] hover:bg-slate-900/70 hover:border-slate-700 transition-all text-left flex flex-col group h-64"
+                           >
+                             <div className="flex justify-between items-start mb-6">
+                               <div className={`p-4 rounded-xl ${track.bg} border ${track.border}`}>
+                                 <track.icon className={`w-6 h-6 ${track.color}`} />
+                               </div>
+                               <div className="text-right">
+                                  <span className={`text-2xl font-black ${track.color}`}>{progress}%</span>
+                                  <p className="text-[10px] text-slate-500 uppercase font-bold">Concluído</p>
+                               </div>
+                             </div>
+                             <h4 className="text-xl font-bold text-white mb-2">{track.title}</h4>
+                             <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden mb-6">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${progress}%` }}
+                                  className={`h-full bg-gradient-to-r ${trackId === 'sql' ? 'from-sky-500 to-blue-500' : trackId === 'excel' ? 'from-green-500 to-emerald-500' : 'from-yellow-500 to-orange-500'}`}
+                                />
+                             </div>
+                             <p className="text-xs font-bold text-slate-400 group-hover:text-white transition-colors flex items-center gap-2">
+                                Continuar Aprendizado <ChevronRight className="w-4 h-4" />
+                             </p>
+                           </button>
+                         );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-900/30 border border-dashed border-slate-800 rounded-[2rem] p-12 text-center">
+                       <p className="text-slate-500 font-medium">Você ainda não iniciou nenhuma trilha.</p>
+                       <button 
+                         onClick={() => setLandingTab('explore')}
+                         className="mt-4 text-sky-400 font-black text-sm uppercase tracking-widest hover:underline"
+                       >
+                         Explorar Catálogo
+                       </button>
+                    </div>
+                  )}
+                </section>
+
+                {/* Certificates Section (Moved Here) */}
+                <section className="space-y-8">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-amber-400/10 rounded-xl border border-amber-400/20">
+                      <Award className="w-6 h-6 text-amber-400" />
+                    </div>
+                    <div>
+                       <h3 className="text-2xl font-black text-white tracking-tighter">Meus Certificados</h3>
+                       <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Conquistas oficiais emitidas</p>
+                    </div>
+                  </div>
+
+                  {certificates.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {certificates.map((cert, idx) => {
+                        const isMaster = cert.userName.includes('(MASTER GRADUATE)');
+                        return (
+                          <motion.button
+                            key={`${cert.track}-${cert.rank}-${idx}`}
+                            whileHover={{ scale: 1.05, y: -5 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setShowCert(cert)}
+                            className="p-8 bg-slate-900/40 border border-slate-800 rounded-[2.5rem] hover:bg-slate-900 transition-all text-left flex flex-col gap-6 relative overflow-hidden group h-full"
+                          >
+                             {/* Glossy overlay */}
+                             <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
+                             
+                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
+                               isMaster ? 'bg-purple-500/20' : 
+                               cert.rank === 'Expert' ? 'bg-amber-500/20' : 
+                               cert.rank === 'Analyst' ? 'bg-sky-500/20' : 'bg-slate-500/20'
+                             }`}>
+                               <Award className={`w-8 h-8 ${
+                                 isMaster ? 'text-purple-400' : 
+                                 cert.rank === 'Expert' ? 'text-amber-400' : 
+                                 cert.rank === 'Analyst' ? 'text-sky-400' : 'text-slate-400'
+                               }`} />
+                             </div>
+                             
+                             <div className="flex-1">
+                               <h4 className="text-white font-black text-lg tracking-tight mb-1">
+                                 {isMaster ? 'Master Graduate' : `${cert.track.toUpperCase()}: ${cert.rank}`}
+                               </h4>
+                               <p className="text-slate-500 text-[10px] font-mono uppercase tracking-widest">Emissão: {cert.issuedAt}</p>
+                             </div>
+                             
+                             <div className="flex items-center gap-2 text-xs font-black text-sky-400 uppercase tracking-widest group-hover:gap-3 transition-all pt-4 border-t border-white/5">
+                               Ver Diploma <ChevronRight className="w-4 h-4" />
+                             </div>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-900/30 border border-dashed border-slate-800 rounded-[2rem] p-12 text-center">
+                       <p className="text-slate-500 font-medium">Nenhum certificado obtido ainda.</p>
+                       <p className="text-slate-700 text-xs mt-2 uppercase font-black tracking-widest">Conclua uma trilha final para se certificar</p>
+                    </div>
+                  )}
+                </section>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Footer Branding */}
+          <footer className="mt-32 flex flex-col items-center gap-8 opacity-40">
+             <div className="flex items-center gap-6">
+                <BrainCircuit className="w-6 h-6" />
+                <span className="h-px w-20 bg-slate-700" />
+                <p className="text-xs font-mono uppercase tracking-[0.3em]">Analyst Master System v2.0</p>
+                <span className="h-px w-20 bg-slate-700" />
+             </div>
+          </footer>
         </div>
       </div>
     );
@@ -441,7 +649,7 @@ export default function App() {
             <div className="flex items-center gap-2 leading-none">
               <Database className="w-6 h-6 text-sky-400" />
               <h1 className="text-xl font-bold tracking-tight text-white hidden sm:block">
-                SQL <span className="text-sky-400">Master Lab</span>
+                Analyst <span className="text-sky-400">Master</span>
               </h1>
             </div>
           </button>
