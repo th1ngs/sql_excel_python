@@ -16,7 +16,7 @@ export default function App() {
   const [view, setView] = useState<'landing' | 'dashboard' | 'exercise'>('landing');
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0);
-  const [query, setQuery] = useState(challenges[0].initialQuery || '');
+  const [query, setQuery] = useState('');
   const [results, setResults] = useState<SqlResult[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
@@ -42,7 +42,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentChallenge) return;
-    setQuery(currentChallenge.initialQuery || '');
+    setQuery('');
     setResults([]);
     setError(undefined);
     setIsCorrect(null);
@@ -177,84 +177,95 @@ export default function App() {
   };
 
   const validateResult = (result: SqlResult) => {
-    // Normalize numeric values for comparison
     const normalize = (val: any) => {
+      if (val === null || val === undefined) return null;
       if (typeof val === 'number') return Number(val.toFixed(4));
       if (typeof val === 'string') return val.trim();
       return val;
     };
 
-    // User values without column names (just the data)
     const userValues = result.values.map(row => row.map(normalize));
-    
-    // Expected values without column names
-    const expectedValues = currentChallenge.expectedOutput.map(obj => {
-      // Sort keys to ensure consistent order if we extract values
-      return Object.keys(obj).sort().map(key => normalize(obj[key]));
-    });
+    const expectedOutput = currentChallenge.expectedOutput;
 
-    // Check dimensionality first
-    if (userValues.length !== expectedValues.length) {
+    if (userValues.length !== expectedOutput.length) {
       setIsCorrect(false);
       return;
     }
 
-    if (userValues.length > 0 && userValues[0].length !== expectedValues[0].length) {
+    if (expectedOutput.length === 0) {
+      setIsCorrect(true);
+      saveProgress(currentChallenge.id);
+      return;
+    }
+
+    const expectedKeys = Object.keys(expectedOutput[0]);
+    if (userValues[0].length !== expectedKeys.length) {
       setIsCorrect(false);
       return;
     }
 
-    // Sort both if order doesn't matter
-    let userToCompare = [...userValues];
-    let expectedToCompare = [...expectedValues];
+    // Convert expected objects to rows using a consistent key order
+    const expectedRows = expectedOutput.map(obj => expectedKeys.map(k => normalize(obj[k])));
 
-    if (!currentChallenge.orderSensitive) {
+    // Helper to check if two sets of rows match under a specific column mapping
+    const checkMatch = (userRows: any[][], expRows: any[][]) => {
       const sortFn = (a: any[], b: any[]) => JSON.stringify(a).localeCompare(JSON.stringify(b));
-      userToCompare.sort(sortFn);
-      expectedToCompare.sort(sortFn);
+      
+      const uToCompare = currentChallenge.orderSensitive ? userRows : [...userRows].sort(sortFn);
+      const eToCompare = currentChallenge.orderSensitive ? expRows : [...expRows].sort(sortFn);
+
+      return JSON.stringify(uToCompare) === JSON.stringify(eToCompare);
+    };
+
+    // Try all column permutations to find a match
+    const numCols = expectedKeys.length;
+    const colIndices = Array.from({ length: numCols }, (_, i) => i);
+
+    const permutations: number[][] = [];
+    const generate = (arr: number[], m: number[] = []) => {
+      if (arr.length === 0) {
+        permutations.push(m);
+      } else {
+        for (let i = 0; i < arr.length; i++) {
+          const curr = arr.slice();
+          const next = curr.splice(i, 1);
+          generate(curr.slice(), m.concat(next));
+        }
+      }
+    };
+    
+    // Only generate permutations if column count is reasonable (e.g., <= 6)
+    if (numCols <= 6) {
+      generate(colIndices);
+    } else {
+      // Fallback for huge tables: direct column match (strict order)
+      permutations.push(colIndices);
     }
 
-    const valuesMatch = JSON.stringify(userToCompare) === JSON.stringify(expectedToCompare);
-
-    if (valuesMatch) {
-      // Check if column names also match (strict check for aliases)
-      const userOutput = result.values.map(row => {
-        const obj: any = {};
-        result.columns.forEach((col, i) => { obj[col] = normalize(row[i]); });
-        return obj;
-      });
-
-      const expectedProcessed = currentChallenge.expectedOutput.map(item => {
-        const ordered: any = {};
-        Object.keys(item).sort().forEach(key => ordered[key] = normalize(item[key]));
-        return ordered;
-      });
-
-      const userProcessed = userOutput.map(item => {
-        const ordered: any = {};
-        Object.keys(item).sort().forEach(key => ordered[key] = normalize(item[key]));
-        return ordered;
-      });
-
-      if (!currentChallenge.orderSensitive) {
-        const sortFn = (a: any, b: any) => JSON.stringify(a).localeCompare(JSON.stringify(b));
-        expectedProcessed.sort(sortFn);
-        userProcessed.sort(sortFn);
+    let bestMatch = false;
+    for (const p of permutations) {
+      const permutedUserRows = userValues.map(row => p.map(idx => row[idx]));
+      if (checkMatch(permutedUserRows, expectedRows)) {
+        bestMatch = true;
+        break;
       }
+    }
 
-      const keysMatch = JSON.stringify(expectedProcessed) === JSON.stringify(userProcessed);
-
-      if (keysMatch) {
-        setIsCorrect(true);
-        saveProgress(currentChallenge.id);
-      } else {
-        // Values are correct, but column names are wrong
-        setIsCorrect(true); // Still consider correct for UX
-        saveProgress(currentChallenge.id);
-        setError("Dica: Os valores estão perfeitos! No exercício real, tente usar o nome da coluna exato (ex: 'AS total') para ser mais preciso.");
+    if (bestMatch) {
+      setIsCorrect(true);
+      saveProgress(currentChallenge.id);
+      
+      // If the column names are exactly what we expected (ignoring order), don't show info
+      const userColsSet = new Set(result.columns.map(c => c.toLowerCase()));
+      const expectedColsSet = new Set(expectedKeys.map(k => k.toLowerCase()));
+      const setsMatch = [...expectedColsSet].every(k => userColsSet.has(k));
+      
+      if (!setsMatch) {
+        setError("Dica: Seus resultados estão corretos! Note que você usou nomes de colunas (aliases) diferentes dos sugeridos, mas o Analyst Master aceitou sua lógica.");
       }
     } else {
       setIsCorrect(false);
+      setError(undefined);
     }
   };
 

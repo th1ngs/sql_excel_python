@@ -18,14 +18,22 @@ export function SqlEditor({ query, setQuery, onRun, loading }: SqlEditorProps) {
           <div className="w-3 h-3 rounded-full bg-green-500" />
           <span className="ml-2 text-xs font-mono text-slate-400">query.sql</span>
         </div>
-        <button
-          onClick={onRun}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-1 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-600 text-white text-sm font-medium rounded transition-colors group"
-        >
-          <Play className={`w-4 h-4 ${loading ? 'animate-pulse' : 'group-hover:scale-110 transition-transform'}`} />
-          {loading ? 'Executando...' : 'Executar'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setQuery('')}
+            className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium rounded transition-colors"
+          >
+            Limpar
+          </button>
+          <button
+            onClick={onRun}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-1 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-600 text-white text-sm font-medium rounded transition-colors group"
+          >
+            <Play className={`w-4 h-4 ${loading ? 'animate-pulse' : 'group-hover:scale-110 transition-transform'}`} />
+            {loading ? 'Executando...' : 'Executar'}
+          </button>
+        </div>
       </div>
       <div className="flex-1 relative font-mono text-sm">
         <textarea
