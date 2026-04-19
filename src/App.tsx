@@ -907,8 +907,8 @@ export default function App() {
                             {catChallenges.map((c) => {
                               const isCompleted = completedIds.includes(c.id);
                               const actualIdx = filteredChallenges.findIndex(ch => ch.id === c.id);
-                              const prevChallenge = actualIdx > 0 ? filteredChallenges[actualIdx - 1] : null;
-                              const isLocked = prevChallenge && !completedIds.includes(prevChallenge.id);
+                              // Challenges are no longer locked by sequence
+                              const isLocked = false; 
 
                               return (
                                 <motion.button
@@ -1129,7 +1129,20 @@ export default function App() {
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {filteredChallenges
-                      .filter(c => c.id !== currentChallenge.id && !completedIds.includes(c.id))
+                      .filter(c => {
+                        const isNotCurrent = c.id !== currentChallenge.id;
+                        const notCompleted = !completedIds.includes(c.id);
+                        
+                        // If it's a final test, check if it's unlocked
+                        if (c.isFinalTest) {
+                          const diffChallenges = filteredChallenges.filter(ch => ch.difficulty === c.difficulty);
+                          const nonFinalChallenges = diffChallenges.filter(ch => !ch.isFinalTest);
+                          const allNonFinalCompleted = nonFinalChallenges.every(ch => completedIds.includes(ch.id));
+                          return isNotCurrent && notCompleted && allNonFinalCompleted;
+                        }
+                        
+                        return isNotCurrent && notCompleted;
+                      })
                       .slice(0, 2)
                       .map(nextC => (
                         <button
