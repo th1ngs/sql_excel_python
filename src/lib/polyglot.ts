@@ -4,20 +4,69 @@ import { Track } from '../types';
  * Tradutor Poliglota para o Analyst Master
  * Converte sintaxe de Excel e Python (Pandas) para SQL simulando a execução.
  */
-export const translateToSql = (code: string, track: Track, tableName: string): string => {
+export const translateToSql = (code: string, track: Track, tableName: string, columnNames: string[] = []): string => {
   const cleanCode = code.trim();
   if (!cleanCode) return '';
 
   if (track === 'sql') return cleanCode;
 
+  const getColLetter = (n: number) => {
+    let letter = "";
+    while (n >= 0) {
+      letter = String.fromCharCode((n % 26) + 65) + letter;
+      n = Math.floor(n / 26) - 1;
+    }
+    return letter;
+  };
+
+  const colMapping: Record<string, string> = {};
+  columnNames.forEach((name, idx) => {
+    colMapping[getColLetter(idx)] = name;
+  });
+
   if (track === 'excel') {
     // Caso seja apenas um nome de coluna ou *, assume SELECT * FROM
     if (!cleanCode.startsWith('=')) {
       if (cleanCode.includes(' ') || cleanCode.includes('=')) return cleanCode; // Provável SQL acidental
+      
+      // Check if it's a column letter
+      if (colMapping[cleanCode.toUpperCase()]) {
+        return `SELECT ${colMapping[cleanCode.toUpperCase()]} FROM ${tableName}`;
+      }
       return `SELECT ${cleanCode} FROM ${tableName}`;
     }
 
-    let sql = cleanCode.substring(1); // Remove '='
+    let formula = cleanCode.substring(1); // Remove '='
+
+    // Substituir colunas (A, B, C...) por nomes reais
+    // Precisamos de cuidado para não substituir "B" dentro de "TABLE" ou nomes de funções
+    // Usamos regex com bordas de palavra ou garantindo que não é parte de identificador
+    // Uma forma simples é ordenar as colunas por tamanho decrescente (AA antes de A)
+    const sortedLetters = Object.keys(colMapping).sort((a, b) => b.length - a.length);
+    
+    // Handle Ranges like B1:B10 (simplificamos para apenas usar a coluna por enquanto no SQL)
+    // Se o usuário pedir B1:B3, ele quer o valor da coluna B. 
+    // Em SQL puro, sem um row_number explícito na tabela física, é difícil filtrar por número de linha exato
+    // Mas para os exercícios do Analyst Master, geralmente o usuário quer a coluna inteira.
+    formula = formula.replace(/([A-Z]+)\d*:([A-Z]+)\d*/gi, (match, col1, col2) => {
+       // Se col1 == col2, é apenas uma coluna. Se for diferente, no SQL é mais complexo.
+       // Para fins de MVP, se for A1:A10, retorna o nome da coluna A.
+       const c1 = col1.toUpperCase();
+       return colMapping[c1] || match;
+    });
+
+    // Handle single cells like B2
+    formula = formula.replace(/\b([A-Z]+)\d+\b/gi, (match, letter) => {
+       const l = letter.toUpperCase();
+       return colMapping[l] || match;
+    });
+
+    // Handle just column letters like A
+    sortedLetters.forEach(letter => {
+      const regex = new RegExp(`\\b${letter}\\b`, 'gi');
+      // Apenas substitui se não for parte de uma palavra (ex: case-insensitive match)
+      formula = formula.replace(regex, colMapping[letter]);
+    });
 
     // Mapeamento de Funções Simples
     const mappings: Record<string, string> = {
@@ -25,6 +74,7 @@ export const translateToSql = (code: string, track: Track, tableName: string): s
       'MEDIA': 'AVG',
       'MÉDIA': 'AVG',
       'CONTAR': 'COUNT',
+      'CONT.VALORES': 'COUNT',
       'MINIMO': 'MIN',
       'MÍNIMO': 'MIN',
       'MAXIMO': 'MAX',
@@ -33,34 +83,44 @@ export const translateToSql = (code: string, track: Track, tableName: string): s
       'ARRUMAR': 'TRIM',
       'MAIUSCULA': 'UPPER',
       'MAIÚSCULA': 'UPPER',
-      'SUBSTITUIR': 'REPLACE'
+      'SUBSTITUIR': 'REPLACE',
+      'CONCAT': '||', // Simplificado
+      'CONCATENAR': '||'
     };
 
-    // Aplica mapeamentos (regex simples)
+    // Aplica mapeamentos
     Object.entries(mappings).forEach(([excel, sqlFunc]) => {
-      const regex = new RegExp(`${excel}\\(`, 'gi');
+      const regex = new RegExp(`${excel.replace('.', '\\.')}\\(`, 'gi');
       if (excel === 'ANO') {
-         sql = sql.replace(regex, `${sqlFunc} `);
-         // Nota: ANO precisa fechar o parêntese do strftime, mas aqui estamos simplificando
+         formula = formula.replace(regex, `${sqlFunc} `);
+      } else if (excel === 'CONCAT' || excel === 'CONCATENAR') {
+         // CONCAT(a; b) -> a || b
+         // Isso é complexo com regex, vamos tentar uma abordagem simples
       } else {
-         sql = sql.replace(regex, `${sqlFunc}(`);
+         formula = formula.replace(regex, `${sqlFunc}(`);
       }
     });
 
     // Lógica SE(cond; v1; v2) -> CASE WHEN cond THEN v1 ELSE v2 END
-    // Suporte básico a SE aninhado (substituição recursiva simples ou manual)
-    if (sql.toUpperCase().includes('SE(')) {
-       // Simplificação extrema para o MVP: converte os delimitadores de excel para SQL
-       sql = sql.replace(/SE\(/gi, 'CASE WHEN ');
-       sql = sql.replace(/;/g, ' THEN '); 
-       // Isso precisaria de um parser real para múltiplos SE, mas para exercícios simples funciona
+    if (formula.toUpperCase().includes('SE(')) {
+       // Melhore o suporte a SE: detecta SE(cond; v1; v2)
+       // NOTA: Esta regex é limitada para aninhamento profundo, mas resolve o básico
+       formula = formula.replace(/SE\((.*?);(.*?);(.*?)\)/gi, (match, cond, v1, v2) => {
+         return `CASE WHEN ${cond.trim()} THEN ${v1.trim()} ELSE ${v2.trim()} END`;
+       });
+       
+       // Fallback se a regex falhar (ex: aninhado)
+       formula = formula.replace(/SE\(/gi, 'CASE WHEN ');
     }
 
+    // Replace Excel separators ; with SQL commas (if not already handled in SE)
+    formula = formula.replace(/;/g, ',');
+
     // Se a query não começa com SELECT, adiciona o SELECT
-    if (!sql.toUpperCase().startsWith('SELECT')) {
-      return `SELECT ${sql} FROM ${tableName}`;
+    if (!formula.toUpperCase().trim().startsWith('SELECT')) {
+      return `SELECT ${formula} FROM ${tableName}`;
     }
-    return sql;
+    return formula;
   }
 
   if (track === 'python') {

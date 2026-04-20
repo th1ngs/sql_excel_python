@@ -166,7 +166,12 @@ export default function App() {
       // Get primary table name from setup (crudely for simple exercises)
       const tableNameMatch = currentChallenge.tableSetup[0].match(/CREATE TABLE (\w+)/);
       const tableName = tableNameMatch ? tableNameMatch[1] : 'tabela';
-      effectiveQuery = translateToSql(query, selectedTrack, tableName);
+      
+      // Get column names for this specific table from schema
+      const currentTableSchema = schema.find(s => s.name === tableName);
+      const columnNames = currentTableSchema ? currentTableSchema.data.columns : [];
+
+      effectiveQuery = translateToSql(query, selectedTrack, tableName, columnNames);
     }
 
     const res = runQuery(currentChallenge.tableSetup, effectiveQuery);
