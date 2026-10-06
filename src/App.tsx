@@ -29,6 +29,7 @@ export default function App() {
   const [showCert, setShowCert] = useState<UserCertificate | null>(null);
   const [schema, setSchema] = useState<{name: string, data: SqlResult}[]>([]);
   const [landingTab, setLandingTab] = useState<'explore' | 'me'>('explore');
+  const [challengeFilter, setChallengeFilter] = useState<'all' | 'narrativa' | 'explicativo'>('all');
   
   const [user, setUser] = useState<SimpleUser | null>(() => {
     try {
@@ -826,7 +827,41 @@ export default function App() {
               Trilha: {selectedTrack?.toUpperCase()}
             </div>
             <h2 className="text-3xl font-bold text-white mb-2">Bem-vindo, Comandante {selectedTrack === 'sql' ? 'SQL' : selectedTrack === 'excel' ? 'Excel' : 'Python'}</h2>
-            <p className="text-slate-400 max-w-2xl mb-8">Sua jornada do Junior ao Expert começa aqui. Complete os módulos para subir de nível.</p>
+            <p className="text-slate-400 max-w-2xl mb-6">Sua jornada do Junior ao Expert começa aqui.Alterne entre os Casos Reais de Negócio (narrativas desafiadoras sem facilitação) e os Exercícios Explicativos de sintaxe.</p>
+
+            {/* Mode Filter: Todos / Narrativas Reais / Explicativos */}
+            <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-xl w-fit mb-10">
+              <button
+                onClick={() => setChallengeFilter('all')}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  challengeFilter === 'all'
+                    ? 'bg-sky-500 text-slate-950'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Todos os Exercícios ({filteredChallenges.filter(c => !c.isFinalTest).length})
+              </button>
+              <button
+                onClick={() => setChallengeFilter('narrativa')}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  challengeFilter === 'narrativa'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'text-amber-400 hover:bg-amber-500/10'
+                }`}
+              >
+                Casos de Negócio & Narrativas ({filteredChallenges.filter(c => c.challengeType === 'narrativa').length})
+              </button>
+              <button
+                onClick={() => setChallengeFilter('explicativo')}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                  challengeFilter === 'explicativo'
+                    ? 'bg-sky-500 text-slate-950'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Explicativos · Conceito & Sintaxe ({filteredChallenges.filter(c => c.challengeType !== 'narrativa' && !c.isFinalTest).length})
+              </button>
+            </div>
             
             {/* Career Path Visualization */}
             <div className="grid grid-cols-3 gap-4 mb-12 relative">
@@ -930,8 +965,14 @@ export default function App() {
             )}
 
             {['Básico', 'Intermediário', 'Avançado'].map(difficulty => {
-              const diffChallenges = filteredChallenges.filter(c => c.difficulty === difficulty);
-              if (diffChallenges.length === 0) return null;
+              const allDiffChallenges = filteredChallenges.filter(c => c.difficulty === difficulty);
+              const diffChallenges = allDiffChallenges.filter(c => {
+                if (c.isFinalTest) return true;
+                if (challengeFilter === 'narrativa') return c.challengeType === 'narrativa';
+                if (challengeFilter === 'explicativo') return c.challengeType !== 'narrativa';
+                return true;
+              });
+              if (diffChallenges.filter(c => !c.isFinalTest).length === 0) return null;
 
               const nonFinalChallenges = diffChallenges.filter(c => !c.isFinalTest);
               const allNonFinalCompleted = nonFinalChallenges.every(c => completedIds.includes(c.id));
@@ -1012,8 +1053,10 @@ export default function App() {
                                         : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'}
                                   `}
                                 >
-                                  <div className="flex justify-between items-start mb-4">
-                                    <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest leading-none pt-1">#{c.id.split('-').pop()}</span>
+                                  <div className="flex justify-between items-start mb-3">
+                                    <span className="text-[10px] font-mono text-slate-400 leading-none pt-1">
+                                      {c.challengeType === 'narrativa' ? 'Caso Real · Sem Facilitação' : 'Explicativo · Sintaxe'}
+                                    </span>
                                     {isCompleted ? (
                                       <div className="bg-green-500/20 p-1 rounded">
                                         <ShieldCheck className="w-3 h-3 text-green-500" />
@@ -1024,6 +1067,11 @@ export default function App() {
                                       </div>
                                     )}
                                   </div>
+                                  {c.businessContext && (
+                                    <p className="text-[10px] text-amber-400 font-medium mb-1 truncate">
+                                      {c.businessContext}
+                                    </p>
+                                  )}
                                   <h4 className={`font-bold mb-2 transition-colors text-sm leading-tight ${isCompleted ? 'text-slate-300' : isLocked ? 'text-slate-600' : 'text-white group-hover:text-sky-400'}`}>
                                     {c.title}
                                   </h4>

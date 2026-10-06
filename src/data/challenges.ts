@@ -1,6 +1,7 @@
 import { Challenge } from '../types';
+import { narrativeChallenges } from './narrativeChallenges';
 
-export const challenges: Challenge[] = [
+const explanatoryChallenges: Challenge[] = [
   // ==========================================
   // TRILHA: SQL MASTER (25 Desafios)
   // ==========================================
@@ -6231,3 +6232,12 @@ export const challenges: Challenge[] = [
     initialQuery: 'len(df)'
   }
 ];
+
+export const challenges: Challenge[] = [
+  ...narrativeChallenges,
+  ...explanatoryChallenges.map(c => ({
+    ...c,
+    challengeType: c.challengeType || ('explicativo' as const)
+  }))
+];
+

@@ -16,6 +16,8 @@ export interface Challenge {
   category: string;
   orderSensitive?: boolean;
   isFinalTest?: boolean;
+  challengeType?: 'explicativo' | 'narrativa';
+  businessContext?: string;
 }
 
 export interface UserCertificate {

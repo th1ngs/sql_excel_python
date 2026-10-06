@@ -55,7 +55,7 @@ service cloud.firestore {
           'winnerUid', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.duelId) && data.duelId.size() >= 4 && data.duelId.size() <= 64
-        && isValidId(data.challengeId) && data.challengeId.size() <= 64
+        && isValidId(data.challengeId) && data.challengeId.size() <= 128
         && data.difficulty is string && data.difficulty.size() <= 30 && data.difficulty in ['Básico', 'Intermediário', 'Avançado']
         && data.status is string && data.status.size() <= 20 && data.status in ['waiting', 'in_progress', 'completed']
         && isValidId(data.hostUid)
