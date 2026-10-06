@@ -1,67 +1,178 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default Deny
-    match /{document=**} { allow read, write: if false; }
+    // Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
-    // Helpers
-    function isSignedIn() { return request.auth != null; }
-    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    // Global Primitives
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
 
     // Validation Blueprints
     function isValidUser(data) {
-      return data.keys().hasAll(['displayName', 'email', 'createdAt']) 
-        && data.keys().size() == 3
+      return data.keys().hasAll(['displayName', 'email', 'createdAt'])
+        && data.keys().hasOnly(['displayName', 'email', 'createdAt'])
         && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
-        && data.email is string && data.email.size() <= 200;
+        && data.email is string && data.email.size() >= 1 && data.email.size() <= 200;
     }
 
     function isValidProgress(data) {
       return data.keys().hasAll(['challengeId', 'track', 'completedAt'])
-        && data.keys().size() == 3
+        && data.keys().hasOnly(['challengeId', 'track', 'completedAt'])
         && isValidId(data.challengeId)
-        && data.track is string && data.track.size() <= 50;
+        && data.track is string && data.track.size() >= 1 && data.track.size() <= 50;
     }
 
     function isValidCertificate(data) {
       return data.keys().hasAll(['rank', 'track', 'issuedAt', 'userName'])
-        && data.keys().size() == 4
-        && data.rank is string
-        && data.track is string
-        && data.userName is string && data.userName.size() <= 100;
+        && data.keys().hasOnly(['rank', 'track', 'issuedAt', 'userName', 'issuedAtServer'])
+        && data.rank is string && data.rank.size() >= 1 && data.rank.size() <= 50
+        && data.track is string && data.track.size() >= 1 && data.track.size() <= 50
+        && data.issuedAt is string && data.issuedAt.size() >= 1 && data.issuedAt.size() <= 50
+        && data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 100;
     }
 
-    // Rules Mapping
+    function isValidDuel(data) {
+      return data.keys().hasAll([
+          'duelId', 'challengeId', 'difficulty', 'status',
+          'hostUid', 'hostName', 'hostCompleted', 'hostTimeMs', 'hostCharCount', 'hostQuery', 'hostScore',
+          'guestUid', 'guestName', 'guestCompleted', 'guestTimeMs', 'guestCharCount', 'guestQuery', 'guestScore',
+          'winnerUid', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'duelId', 'challengeId', 'difficulty', 'status',
+          'hostUid', 'hostName', 'hostCompleted', 'hostTimeMs', 'hostCharCount', 'hostQuery', 'hostScore',
+          'guestUid', 'guestName', 'guestCompleted', 'guestTimeMs', 'guestCharCount', 'guestQuery', 'guestScore',
+          'winnerUid', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.duelId) && data.duelId.size() >= 4 && data.duelId.size() <= 64
+        && isValidId(data.challengeId) && data.challengeId.size() <= 64
+        && data.difficulty is string && data.difficulty.size() <= 30 && data.difficulty in ['Básico', 'Intermediário', 'Avançado']
+        && data.status is string && data.status.size() <= 20 && data.status in ['waiting', 'in_progress', 'completed']
+        && isValidId(data.hostUid)
+        && data.hostName is string && data.hostName.size() >= 1 && data.hostName.size() <= 100
+        && data.hostCompleted is bool
+        && data.hostTimeMs is number && data.hostTimeMs >= 0
+        && data.hostCharCount is number && data.hostCharCount >= 0
+        && data.hostQuery is string && data.hostQuery.size() <= 2000
+        && data.hostScore is number && data.hostScore >= 0
+        && data.guestUid is string && data.guestUid.size() <= 128
+        && data.guestName is string && data.guestName.size() <= 100
+        && data.guestCompleted is bool
+        && data.guestTimeMs is number && data.guestTimeMs >= 0
+        && data.guestCharCount is number && data.guestCharCount >= 0
+        && data.guestQuery is string && data.guestQuery.size() <= 2000
+        && data.guestScore is number && data.guestScore >= 0
+        && data.winnerUid is string && data.winnerUid.size() <= 128;
+    }
+
+    // Users Collection (Username-only access as requested by user)
     match /users/{uid} {
-      allow get: if isOwner(uid);
-      allow create: if isOwner(uid) 
-        && isValidUser(incoming()) 
-        && incoming().email == request.auth.token.email
+      allow get: if isValidId(uid);
+      allow create: if isValidId(uid)
+        && isValidUser(incoming())
         && incoming().createdAt == request.time;
-      
-      allow update: if isOwner(uid) 
+
+      allow update: if isValidId(uid)
         && isValidUser(incoming())
         && incoming().diff(existing()).affectedKeys().hasOnly(['displayName'])
         && incoming().email == existing().email
         && incoming().createdAt == existing().createdAt;
 
       match /challenges/{challengeId} {
-        allow list, get: if isOwner(uid);
-        allow create: if isOwner(uid) 
-          && isValidProgress(incoming()) 
+        allow list: if isValidId(uid);
+        allow get: if isValidId(uid) && isValidId(challengeId);
+        allow create, update: if isValidId(uid)
+          && isValidId(challengeId)
+          && isValidProgress(incoming())
           && challengeId == incoming().challengeId
           && incoming().completedAt == request.time;
       }
 
       match /certificates/{certId} {
-         allow list, get: if isOwner(uid);
-         allow create: if isOwner(uid) 
+        allow list: if isValidId(uid);
+        allow get: if isValidId(uid) && isValidId(certId);
+        allow create, update: if isValidId(uid)
+          && isValidId(certId)
           && isValidCertificate(incoming())
-          && incoming().issuedAt == request.time;
+          && incoming().issuedAtServer == request.time;
       }
+    }
+
+    // Duels Collection (Real-Time Multiplayer SQL Duels)
+    match /duels/{duelId} {
+      allow get: if isValidId(duelId);
+      allow list: if existing().status in ['waiting', 'in_progress', 'completed'];
+
+      allow create: if isValidId(duelId)
+        && isValidDuel(incoming())
+        && incoming().duelId == duelId
+        && incoming().status == 'waiting'
+        && incoming().hostCompleted == false
+        && incoming().guestUid == ''
+        && incoming().guestCompleted == false
+        && incoming().winnerUid == ''
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(duelId)
+        && isValidDuel(incoming())
+        && existing().status != 'completed'
+        && incoming().duelId == existing().duelId
+        && incoming().challengeId == existing().challengeId
+        && incoming().difficulty == existing().difficulty
+        && incoming().hostUid == existing().hostUid
+        && incoming().hostName == existing().hostName
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Guest joins a waiting room and starts the duel
+          (
+            existing().status == 'waiting'
+            && incoming().status == 'in_progress'
+            && isValidId(incoming().guestUid)
+            && incoming().guestName.size() >= 1
+            && incoming().diff(existing()).affectedKeys().hasOnly(['guestUid', 'guestName', 'status', 'updatedAt'])
+          )
+          ||
+          // Action 2: Host updates progress or completes the duel
+          (
+            existing().status == 'in_progress'
+            && incoming().guestUid == existing().guestUid
+            && incoming().guestName == existing().guestName
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'hostCompleted', 'hostTimeMs', 'hostCharCount', 'hostQuery', 'hostScore',
+              'status', 'winnerUid', 'updatedAt'
+            ])
+          )
+          ||
+          // Action 3: Guest updates progress or completes the duel
+          (
+            existing().status == 'in_progress'
+            && incoming().guestUid == existing().guestUid
+            && incoming().guestName == existing().guestName
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'guestCompleted', 'guestTimeMs', 'guestCharCount', 'guestQuery', 'guestScore',
+              'status', 'winnerUid', 'updatedAt'
+            ])
+          )
+          ||
+          // Action 4: Host cancels a waiting room
+          (
+            existing().status == 'waiting'
+            && incoming().status == 'completed'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'winnerUid', 'updatedAt'])
+          )
+        );
     }
   }
 }

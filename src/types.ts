@@ -35,3 +35,34 @@ export interface ExecutionResult {
   data?: SqlResult[];
   error?: string;
 }
+
+export interface SimpleUser {
+  uid: string;
+  displayName: string;
+  email?: string | null;
+}
+
+export interface DuelRoom {
+  duelId: string;
+  challengeId: string;
+  difficulty: Difficulty;
+  status: 'waiting' | 'in_progress' | 'completed';
+  hostUid: string;
+  hostName: string;
+  hostCompleted: boolean;
+  hostTimeMs: number;
+  hostCharCount: number;
+  hostQuery: string;
+  hostScore: number;
+  guestUid: string;
+  guestName: string;
+  guestCompleted: boolean;
+  guestTimeMs: number;
+  guestCharCount: number;
+  guestQuery: string;
+  guestScore: number;
+  winnerUid: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+

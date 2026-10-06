@@ -1,149 +1,132 @@
 import React, { useState } from 'react';
-import { auth, db } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut,
-  updateProfile
-} from 'firebase/auth';
+import { db } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { LogIn, UserPlus, LogOut, Loader2, Sparkles, Database } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { LogIn, Loader2, Database, User } from 'lucide-react';
+import { SimpleUser } from '../types';
 
 interface AuthProps {
-  onAuthSuccess: () => void;
+  onAuthSuccess: (user: SimpleUser) => void;
+}
+
+export function normalizeUsernameToUid(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 60);
+  return `usr_${slug || 'analista'}`;
 }
 
 export const AuthUI = ({ onAuthSuccess }: AuthProps) => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const loginWithUsername = async (rawName: string) => {
+    const cleanName = rawName.trim().slice(0, 100);
+    if (!cleanName) return;
+
     setLoading(true);
+    const uid = normalizeUsernameToUid(cleanName);
+    const simpleUser: SimpleUser = {
+      uid,
+      displayName: cleanName,
+      email: `${uid}@analystmaster.local`
+    };
 
     try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        
-        await updateProfile(user, { displayName });
-        
-        // Create user doc
-        await setDoc(doc(db, 'users', user.uid), {
-          displayName,
-          email,
+      sessionStorage.setItem('analyst_master_user', JSON.stringify(simpleUser));
+      localStorage.setItem('analyst_master_last_user', JSON.stringify(simpleUser));
+
+      await setDoc(
+        doc(db, 'users', uid),
+        {
+          displayName: cleanName,
+          email: `${uid}@analystmaster.local`,
           createdAt: serverTimestamp()
-        });
-      }
-      onAuthSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Erro ao autenticar');
+        }
+      ).catch(() => {
+        // Ignore if user doc already exists
+      });
     } finally {
       setLoading(false);
+      onAuthSuccess(simpleUser);
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await loginWithUsername(displayName);
+  };
+
   return (
-    <div className="max-w-md w-full p-8 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute -top-20 -left-20 w-40 h-40 bg-sky-500/20 rounded-full blur-[80px]" />
-      <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-purple-500/20 rounded-full blur-[80px]" />
-      
+    <div className="max-w-md w-full p-8 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl relative overflow-hidden">
       <div className="relative z-10">
-        <div className="flex flex-col items-center mb-10">
-          <div className="w-16 h-16 bg-sky-500/10 rounded-2xl flex items-center justify-center mb-6 border border-sky-500/20">
-             <Database className="w-8 h-8 text-sky-400" />
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 bg-sky-500/10 rounded-2xl flex items-center justify-center mb-5 border border-sky-500/20">
+            <Database className="w-7 h-7 text-sky-400" />
           </div>
-          <h2 className="text-3xl font-black text-white tracking-tighter mb-2">
-            {isLogin ? 'Bem-vindo de volta' : 'Crie sua conta'}
+          <h2 className="text-2xl font-bold text-white tracking-tight mb-2">
+            Acesso Rápido · Analyst Master
           </h2>
           <p className="text-slate-400 text-sm text-center">
-            {isLogin 
-              ? 'Acesse seu laboratório e continue sua jornada como Analyst Master.' 
-              : 'Comece hoje mesmo sua trilha para se tornar um Analyst Master.'}
+            Digite apenas seu nome de usuário para acessar as trilhas de SQL, Excel, Python e o Modo Duelo.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nome Completo</label>
-              <input 
-                type="text" 
-                required 
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-400 ml-1 block">
+              Seu Nome ou Apelido
+            </label>
+            <div className="relative">
+              <User className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                required
+                autoFocus
+                maxLength={60}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-3 text-white outline-none focus:border-sky-500 transition-all"
-                placeholder="Ex: Seu Nome"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-11 pr-4 py-3 text-white text-sm outline-none focus:border-sky-500 transition-colors"
+                placeholder="Ex: Wesley, Analista_1, Maria..."
               />
             </div>
-          )}
-          
-          <div className="space-y-1">
-             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">E-mail</label>
-             <input 
-               type="email" 
-               required 
-               value={email}
-               onChange={(e) => setEmail(e.target.value)}
-               className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-3 text-white outline-none focus:border-sky-500 transition-all"
-               placeholder="email@exemplo.com"
-             />
           </div>
 
-          <div className="space-y-1">
-             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Senha</label>
-             <input 
-               type="password" 
-               required 
-               value={password}
-               onChange={(e) => setPassword(e.target.value)}
-               className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-3 text-white outline-none focus:border-sky-500 transition-all"
-               placeholder="••••••••"
-             />
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-black py-4 rounded-2xl transition-all shadow-xl shadow-sky-500/10 flex items-center justify-center gap-2 mt-4"
+          <button
+            type="submit"
+            disabled={loading || !displayName.trim()}
+            className="w-full bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-            {isLogin ? 'Entrar no Analyst Master' : 'Criar minha conta'}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+            Entrar Sem Senha
           </button>
         </form>
 
-        <AnimatePresence>
-          {error && (
-            <motion.p 
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="text-red-400 text-xs text-center mt-4 font-bold"
+        <div className="mt-6 pt-6 border-t border-slate-800 space-y-3">
+          <p className="text-xs text-slate-500 text-center">
+            Ou escolha um perfil rápido para testar (inclusive em duas abas no Modo Duelo):
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => loginWithUsername('Jogador 1')}
+              className="py-2 px-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-medium text-slate-300 transition-colors"
             >
-              {error}
-            </motion.p>
-          )}
-        </AnimatePresence>
-
-        <div className="mt-10 pt-6 border-t border-slate-800 text-center">
-           <p className="text-slate-500 text-xs">
-             {isLogin ? 'Ainda não tem conta?' : 'Já possui uma conta?'}
-             <button 
-               onClick={() => setIsLogin(!isLogin)}
-               className="text-sky-400 font-bold ml-2 hover:underline"
-             >
-               {isLogin ? 'Criar conta agora' : 'Fazer login'}
-             </button>
-           </p>
+              Entrar como Jogador 1
+            </button>
+            <button
+              type="button"
+              onClick={() => loginWithUsername('Jogador 2')}
+              className="py-2 px-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-medium text-slate-300 transition-colors"
+            >
+              Entrar como Jogador 2
+            </button>
+          </div>
         </div>
       </div>
     </div>

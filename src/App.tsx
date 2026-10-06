@@ -1,20 +1,20 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Database, Terminal, DatabaseZap, Award, ChevronLeft, ChevronRight, Menu, X, ShieldCheck, ArrowLeft, Play, LayoutGrid, FileSpreadsheet, Code2, Rocket, BrainCircuit, Star, Download, Printer, Share2, LogOut, User } from 'lucide-react';
+import { Database, Terminal, DatabaseZap, Award, ChevronLeft, ChevronRight, Menu, X, ShieldCheck, ArrowLeft, Play, LayoutGrid, FileSpreadsheet, Code2, Rocket, BrainCircuit, Star, Download, Printer, Share2, LogOut, User, Swords } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { challenges } from './data/challenges';
 import { useSqlEngine } from './hooks/useSqlEngine';
-import { Challenge, SqlResult, Track, UserCertificate, Rank } from './types';
+import { Challenge, SqlResult, Track, UserCertificate, Rank, SimpleUser } from './types';
 import { SqlEditor } from './components/SqlEditor';
 import { DataTable } from './components/DataTable';
 import { ChallengeDetails } from './components/ChallengeDetails';
+import { DuelMode } from './components/DuelMode';
 import { AuthUI } from './components/Auth.tsx';
-import { auth, db } from './lib/firebase';
+import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import { translateToSql } from './lib/polyglot';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { collection, doc, getDocs, setDoc, serverTimestamp, query as fsQuery, where } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'dashboard' | 'exercise'>('landing');
+  const [view, setView] = useState<'landing' | 'dashboard' | 'exercise' | 'duel'>('landing');
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0);
   const [query, setQuery] = useState('');
@@ -30,8 +30,23 @@ export default function App() {
   const [schema, setSchema] = useState<{name: string, data: SqlResult}[]>([]);
   const [landingTab, setLandingTab] = useState<'explore' | 'me'>('explore');
   
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState<SimpleUser | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('analyst_master_user') || localStorage.getItem('analyst_master_last_user');
+      return saved ? (JSON.parse(saved) as SimpleUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('analyst_master_user');
+    localStorage.removeItem('analyst_master_last_user');
+    setUser(null);
+    setCompletedIds([]);
+    setCertificates([]);
+  };
 
   const { loading, runQuery, getSchema } = useSqlEngine();
 
@@ -55,31 +70,38 @@ export default function App() {
     }
   }, [currentChallenge, loading, getSchema]);
 
-  // Firebase Auth State
+  // Load user progress from Firestore when username session changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      setAuthLoading(false);
-      
-      if (u) {
-        setUserName(u.displayName || 'Recruta');
-        // Fetch data from Firestore
-        try {
-          const challengesSnap = await getDocs(collection(db, 'users', u.uid, 'challenges'));
-          setCompletedIds(challengesSnap.docs.map(doc => doc.id));
-          
-          const certsSnap = await getDocs(collection(db, 'users', u.uid, 'certificates'));
-          setCertificates(certsSnap.docs.map(doc => doc.data() as UserCertificate));
-        } catch (e) {
-          console.error("Error fetching user data:", e);
+    if (!user) {
+      setCompletedIds([]);
+      setCertificates([]);
+      return;
+    }
+
+    setUserName(user.displayName || 'Recruta');
+    let cancelled = false;
+
+    const loadUserData = async () => {
+      try {
+        const challengesSnap = await getDocs(collection(db, 'users', user.uid, 'challenges'));
+        if (!cancelled) {
+          setCompletedIds(challengesSnap.docs.map(d => d.id));
         }
-      } else {
-        setCompletedIds([]);
-        setCertificates([]);
+
+        const certsSnap = await getDocs(collection(db, 'users', user.uid, 'certificates'));
+        if (!cancelled) {
+          setCertificates(certsSnap.docs.map(d => d.data() as UserCertificate));
+        }
+      } catch (e) {
+        console.error('Error fetching user data:', e);
       }
-    });
-    return unsubscribe;
-  }, []);
+    };
+
+    loadUserData();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const saveProgress = async (id: string) => {
     if (!user) return;
@@ -92,11 +114,15 @@ export default function App() {
       const challenge = challenges.find(c => c.id === id);
       if (challenge) {
         // Persist to Firestore
-        await setDoc(doc(db, 'users', user.uid, 'challenges', id), {
-          challengeId: id,
-          track: challenge.track,
-          completedAt: serverTimestamp()
-        });
+        try {
+          await setDoc(doc(db, 'users', user.uid, 'challenges', id), {
+            challengeId: id,
+            track: challenge.track,
+            completedAt: serverTimestamp()
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/challenges/${id}`);
+        }
       }
     }
 
@@ -412,8 +438,22 @@ export default function App() {
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_transparent_70%)] from-sky-500/10">
-        <AuthUI onAuthSuccess={() => {}} />
+        <AuthUI onAuthSuccess={(loggedInUser) => setUser(loggedInUser)} />
       </div>
+    );
+  }
+
+  // Duel Mode View
+  if (view === 'duel') {
+    return (
+      <DuelMode
+        user={user}
+        sqlChallenges={challenges.filter(c => c.track === 'sql')}
+        runQuery={runQuery}
+        getSchema={getSchema}
+        onBack={() => setView('landing')}
+        onChallengeCompleted={saveProgress}
+      />
     );
   }
 
@@ -454,6 +494,12 @@ export default function App() {
                 className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${landingTab === 'explore' ? 'bg-sky-500 text-slate-950 shadow-lg' : 'text-slate-400 hover:text-white'}`}
               >
                 <LayoutGrid className="w-4 h-4" /> Explorar Trilhas
+              </button>
+              <button 
+                onClick={() => setView('duel')}
+                className="px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 text-amber-400 hover:bg-amber-500/10"
+              >
+                <Swords className="w-4 h-4" /> Modo Duelo SQL
               </button>
               <button 
                 onClick={() => setLandingTab('me')}
@@ -506,6 +552,28 @@ export default function App() {
                     </motion.button>
                   ))}
                 </div>
+
+                {/* Modo Duelo SQL Banner */}
+                <div className="p-8 rounded-[2.5rem] border border-amber-500/20 bg-slate-900/60 flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex items-start gap-5">
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 shrink-0">
+                      <Swords className="w-8 h-8 text-amber-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold text-amber-400">Multiplayer em Tempo Real · Eficiência SQL</span>
+                      <h3 className="text-2xl font-black text-white tracking-tight">Modo Duelo: Desafio Simultâneo de Queries</h3>
+                      <p className="text-slate-400 text-sm max-w-2xl">
+                        Enfrente outro usuário no mesmo desafio de SQL simultaneamente. Vence quem resolver com a query mais eficiente: menor tempo de execução e menos caracteres digitados.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setView('duel')}
+                    className="px-6 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-widest rounded-xl transition-colors flex items-center gap-2 shrink-0"
+                  >
+                    <Swords className="w-4 h-4" /> Entrar na Arena de Duelo
+                  </button>
+                </div>
               </motion.div>
             ) : (
               <motion.div 
@@ -534,10 +602,10 @@ export default function App() {
                     </p>
                     <div className="pt-4">
                       <button 
-                        onClick={() => signOut(auth)}
+                        onClick={handleLogout}
                         className="flex items-center gap-2 px-6 py-2.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl font-bold text-sm hover:bg-red-500 hover:text-white transition-all mx-auto md:mx-0"
                       >
-                         <LogOut className="w-4 h-4" /> Sair da Conta
+                         <LogOut className="w-4 h-4" /> Trocar Usuário / Sair
                       </button>
                     </div>
                   </div>
@@ -712,10 +780,19 @@ export default function App() {
           </button>
           
           <div className="flex items-center gap-4">
+             {selectedTrack === 'sql' && (
+               <button
+                 onClick={() => setView('duel')}
+                 className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg border border-amber-500/30 text-amber-400 transition-colors"
+               >
+                 <Swords className="w-4 h-4" />
+                 <span className="text-xs font-bold whitespace-nowrap">Modo Duelo</span>
+               </button>
+             )}
              <button 
-               onClick={() => signOut(auth)}
+               onClick={handleLogout}
                className="flex items-center gap-2 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded-full border border-red-500/30 text-red-500 transition-colors mr-2"
-               title="Sair"
+               title="Trocar Usuário"
              >
                <LogOut className="w-4 h-4" />
                <span className="text-[10px] font-bold uppercase hidden sm:inline">Sair</span>

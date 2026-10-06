@@ -33,6 +33,57 @@
         "userName": { "type": "string" }
       },
       "required": ["rank", "track", "userName"]
+    },
+    "Duel": {
+      "title": "SQL Duel Room",
+      "description": "Real-time multiplayer SQL challenge duel between two users",
+      "type": "object",
+      "properties": {
+        "duelId": { "type": "string", "minLength": 4, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "challengeId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "difficulty": { "type": "string", "enum": ["Básico", "Intermediário", "Avançado"], "maxLength": 30 },
+        "status": { "type": "string", "enum": ["waiting", "in_progress", "completed"], "maxLength": 20 },
+        "hostUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "hostName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "hostCompleted": { "type": "boolean" },
+        "hostTimeMs": { "type": "number" },
+        "hostCharCount": { "type": "number" },
+        "hostQuery": { "type": "string", "maxLength": 2000 },
+        "hostScore": { "type": "number" },
+        "guestUid": { "type": "string", "maxLength": 128 },
+        "guestName": { "type": "string", "maxLength": 100 },
+        "guestCompleted": { "type": "boolean" },
+        "guestTimeMs": { "type": "number" },
+        "guestCharCount": { "type": "number" },
+        "guestQuery": { "type": "string", "maxLength": 2000 },
+        "guestScore": { "type": "number" },
+        "winnerUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "duelId",
+        "challengeId",
+        "difficulty",
+        "status",
+        "hostUid",
+        "hostName",
+        "hostCompleted",
+        "hostTimeMs",
+        "hostCharCount",
+        "hostQuery",
+        "hostScore",
+        "guestUid",
+        "guestName",
+        "guestCompleted",
+        "guestTimeMs",
+        "guestCharCount",
+        "guestQuery",
+        "guestScore",
+        "winnerUid",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -47,6 +98,10 @@
     "/users/{uid}/certificates/{certId}": {
       "schema": "Certificate",
       "description": "Subcollection for storing earned certificates per user"
+    },
+    "/duels/{duelId}": {
+      "schema": "Duel",
+      "description": "Real-time SQL duel rooms for head-to-head query efficiency matches"
     }
   }
 }
